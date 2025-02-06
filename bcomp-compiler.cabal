@@ -1,0 +1,36 @@
+cabal-version:   3.0
+name:            bcomp-compiler
+synopsis:        Compiler for basic computer (bcomp-ng) of ITMO University
+version:         0.1.0.0
+license:         MIT
+license-file:    LICENSE
+author:          Vladimir Lesnikov
+maintainer:      v.a.lesnikov@vk.com
+category:        Development
+build-type:      Simple
+extra-doc-files: README.md
+stability:       alpha
+homepage:        https://github.com/valesnikov/bcomp-compiler
+bug-reports:     https://github.com/valesnikov/bcomp-compiler/issues
+
+common build-directives
+  build-depends:    base >=4.16 && <5
+  ghc-options:      -Wall
+  default-language: GHC2021
+
+executable bcompc
+  import:         build-directives
+  main-is:        Main.hs
+  other-modules:
+    Ops
+    Optimize
+    Parse
+    Prepare
+    Translate
+
+  build-depends:
+    , containers  >=0.6    && <1
+    , mtl         >=2      && <3
+    , parsec      >=3.1.18 && <4
+
+  hs-source-dirs: app
