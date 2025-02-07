@@ -16,6 +16,7 @@ main = do
     _ -> getContents
 
   let a = showOps . postOptimize . translate . unblockVars . preEvaluate <$> parseProgramm "" str
+  --let a = show <$> parseProgramm "" str
 
   case a of
     Left err -> hPrint stderr err

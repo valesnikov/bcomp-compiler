@@ -28,6 +28,8 @@ evalStmt x = case x of
   (SAssign name expr) -> SAssign name $ evalExpr expr
   (SMod name expr) -> SMod name $ evalExpr expr
   (SStore addr expr) -> SStore (evalExpr addr) (evalExpr expr)
+  (SMark _) -> x
+  (SGoto _) -> x
 
 inBlockEval :: [Stmt] -> [Stmt]
 inBlockEval = map evalStmt . filter (/= SBlock []) . trimToReturn []

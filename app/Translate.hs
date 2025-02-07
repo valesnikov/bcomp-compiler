@@ -25,18 +25,20 @@ translateStmt :: Stmt -> State Integer BevmAst
 translateStmt stmt = case stmt of
   (SAssign _ (EConst _)) -> pure [] -- is determined during initialization
   (SAssign v e) -> translateStmt $ SMod v e
-  (SMod var expr) -> pure $ translateExpr expr ++ [OP_ST (AddrAbs var)]
+  (SMod var expr) -> pure $ translateExpr expr ++ [OP_ST $ AddrAbs var]
   (SReturn expr) -> pure $ translateExpr expr ++ [OP_HLT]
   (SStore _ _) -> error "The BEVM has terrible addressing, no pointers yet"
   (SBlock stmts) -> concat <$> mapM translateStmt stmts
+  (SMark mark) -> pure [OP_LABEL $ getMarkName mark]
+  (SGoto mark) -> pure [OP_JUMP . AddrAbs $ getMarkName mark]
   _ -> error "Unimplemented"
 
 translateExpr :: Expr -> BevmAst
 translateExpr = f
   where
     f expr = case expr of
-      (EConst v) -> [OP_LD (constAddr v)]
-      (EIdent n) -> [OP_LD (AddrAbs n)]
+      (EConst v) -> [OP_LD $ constAddr v]
+      (EIdent n) -> [OP_LD $ AddrAbs n]
       (ELoad _) -> error "The BEVM has terrible addressing, no pointers yet"
       --
       (EOpNeg ex) -> f ex ++ [OP_NEG]
@@ -44,29 +46,29 @@ translateExpr = f
       (EOpAsr ex) -> f ex ++ [OP_ASR]
       (EOpNot ex) -> f ex ++ [OP_NOT]
       --
-      (EOpAdd ex1 (EConst v)) -> f ex1 ++ [OP_ADD (constAddr v)]
-      (EOpAdd (EConst v) ex2) -> f $ EOpAdd ex2 (EConst v)
-      (EOpAdd ex1 (EIdent v)) -> f ex1 ++ [OP_ADD (AddrAbs v)]
-      (EOpAdd (EIdent v) ex2) -> f $ EOpAdd ex2 (EIdent v)
-      (EOpAdd ex1 ex2) -> f ex1 ++ [OP_PUSH] ++ f ex2 ++ [OP_ADD (AddrStk 0)] ++ pop_
+      (EOpAdd ex1 (EConst v)) -> f ex1 ++ [OP_ADD $ constAddr v]
+      (EOpAdd (EConst v) ex2) -> f $ EOpAdd ex2 $ EConst v
+      (EOpAdd ex1 (EIdent v)) -> f ex1 ++ [OP_ADD $ AddrAbs v]
+      (EOpAdd (EIdent v) ex2) -> f $ EOpAdd ex2 $ EIdent v
+      (EOpAdd ex1 ex2) -> f ex1 ++ [OP_PUSH] ++ f ex2 ++ [OP_ADD $ AddrStk 0] ++ pop_
       --
-      (EOpSub ex1 (EConst v)) -> f ex1 ++ [OP_SUB (constAddr v)]
-      (EOpSub (EConst v) ex2) -> f (EOpSub ex2 (EConst v)) ++ [OP_NEG]
-      (EOpSub ex1 (EIdent v)) -> f ex1 ++ [OP_SUB (AddrAbs v)]
-      (EOpSub (EIdent v) ex2) -> f (EOpSub ex2 (EIdent v)) ++ [OP_NEG]
-      (EOpSub ex1 ex2) -> f ex2 ++ [OP_PUSH] ++ f ex1 ++ [OP_SUB (AddrStk 0)] ++ pop_
+      (EOpSub ex1 (EConst v)) -> f ex1 ++ [OP_SUB $ constAddr v]
+      (EOpSub (EConst v) ex2) -> f (EOpSub ex2 $ EConst v) ++ [OP_NEG]
+      (EOpSub ex1 (EIdent v)) -> f ex1 ++ [OP_SUB $ AddrAbs v]
+      (EOpSub (EIdent v) ex2) -> f (EOpSub ex2 $ EIdent v) ++ [OP_NEG]
+      (EOpSub ex1 ex2) -> f ex2 ++ [OP_PUSH] ++ f ex1 ++ [OP_SUB $ AddrStk 0] ++ pop_
       --
-      (EOpAnd ex1 (EConst v)) -> f ex1 ++ [OP_AND (constAddr v)]
-      (EOpAnd (EConst v) ex2) -> f $ EOpAnd ex2 (EConst v)
-      (EOpAnd ex1 (EIdent v)) -> f ex1 ++ [OP_AND (AddrAbs v)]
-      (EOpAnd (EIdent v) ex2) -> f $ EOpAnd ex2 (EIdent v)
-      (EOpAnd ex1 ex2) -> f ex1 ++ [OP_PUSH] ++ f ex2 ++ [OP_AND (AddrStk 0)] ++ pop_
+      (EOpAnd ex1 (EConst v)) -> f ex1 ++ [OP_AND $ constAddr v]
+      (EOpAnd (EConst v) ex2) -> f $ EOpAnd ex2 $ EConst v
+      (EOpAnd ex1 (EIdent v)) -> f ex1 ++ [OP_AND $ AddrAbs v]
+      (EOpAnd (EIdent v) ex2) -> f $ EOpAnd ex2 $ EIdent v
+      (EOpAnd ex1 ex2) -> f ex1 ++ [OP_PUSH] ++ f ex2 ++ [OP_AND $ AddrStk 0] ++ pop_
       --
-      (EOpOr ex1 (EConst v)) -> f ex1 ++ [OP_OR (constAddr v)]
-      (EOpOr (EConst v) ex2) -> f $ EOpOr ex2 (EConst v)
-      (EOpOr ex1 (EIdent v)) -> f ex1 ++ [OP_OR (AddrAbs v)]
-      (EOpOr (EIdent v) ex2) -> f $ EOpOr ex2 (EIdent v)
-      (EOpOr ex1 ex2) -> f ex1 ++ [OP_PUSH] ++ f ex2 ++ [OP_OR (AddrStk 0)] ++ pop_
+      (EOpOr ex1 (EConst v)) -> f ex1 ++ [OP_OR $ constAddr v]
+      (EOpOr (EConst v) ex2) -> f $ EOpOr ex2 $ EConst v
+      (EOpOr ex1 (EIdent v)) -> f ex1 ++ [OP_OR $ AddrAbs v]
+      (EOpOr (EIdent v) ex2) -> f $ EOpOr ex2 $ EIdent v
+      (EOpOr ex1 ex2) -> f ex1 ++ [OP_PUSH] ++ f ex2 ++ [OP_OR $ AddrStk 0] ++ pop_
 
 constAddr :: Integer -> Addr
 constAddr v
@@ -122,6 +124,8 @@ getConstants = go
       (SReturn expr) -> fromExpr expr
       (SStore ex1 ex2) -> Set.union (fromExpr ex1) (fromExpr ex2)
       (SBlock stmts) -> Set.unions $ map getConstants stmts
+      (SMark _) -> Set.empty
+      (SGoto _) -> Set.empty
 
     fromLexpr x = case x of
       (LOpEq e1 e2) -> Set.union (fromExpr e1) (fromExpr e2)
@@ -146,4 +150,7 @@ getConstants = go
       (EOpOr ex1 ex2) -> Set.union (fromExpr ex1) (fromExpr ex2)
 
 getConstName :: Integer -> String
-getConstName val = "const_" ++ show val
+getConstName val = "c_" ++ show val
+
+getMarkName :: String -> String
+getMarkName s = "m_" ++ s

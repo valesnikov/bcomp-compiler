@@ -39,8 +39,8 @@ lexer :: Token.TokenParser ()
 lexer =
   Token.makeTokenParser
     emptyDef
-      { Token.reservedNames = ["if", "else", "while", "return", "true", "false"],
-        Token.reservedOpNames = ["*", "~", "<<", ">>", "+", "-", "|", "&", "=", ":=", "==", "!=", "<", ">", "<=", ">="]
+      { Token.reservedNames = ["if", "else", "while", "return", "true", "false", "goto"],
+        Token.reservedOpNames = [":", "*", "~", "<<", ">>", "+", "-", "|", "&", "=", ":=", "==", "!=", "<", ">", "<=", ">="]
       }
 
 identifier :: Parser String
@@ -124,17 +124,32 @@ data Stmt
   | SBlock [Stmt]
   | SReturn Expr
   | SStore Expr Expr
+  | SGoto String
+  | SMark String
   deriving (Show, Eq)
 
 stmt :: Parser Stmt
 stmt =
   try blockStmt
+    <|> try gotoStmt
+    <|> try markStmt
     <|> try assignStmt
     <|> try modifyStmt
     <|> try storeStmt
     <|> try returnStmt
     <|> try ifStmt
     <|> try whileStmt
+
+gotoStmt :: Parser Stmt
+gotoStmt = do
+  _ <- reserved "goto"
+  SGoto <$> identifier
+
+markStmt :: Parser Stmt
+markStmt = do
+  mark <- identifier
+  _ <- reservedOp ":"
+  return $ SMark mark
 
 assignStmt :: Parser Stmt
 assignStmt = do

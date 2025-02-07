@@ -23,19 +23,26 @@ b := 45
 
 a = <<a + (a & b) - (a | b) + >>a + (-a) + ~b
 
+goto skip
+a = 0
+skip:
+
 return a + b
 ```
 All values represent integer signed 16 bit numbers (int16)
 ### Statements
 * `{var} := {expr}` - assignment operator
 * `{var} = {expr}` - modifying operator
+* `goto {label}` - continues execution from the given label
+* `{label}:` - label to which goto jumps
 * `return {expr}` - puts the result of the expression into the AC register and stops execution with HLT
+
 ### Expressions (prioritized)
 * `+{expr}` - does nothing
 * `-{expr}` - negative value
 * `~{expr}` - bitwise not
 * `<<{expr}` - bitwise left shift (*2)
-* `<<{expr}` - bitwise right shift (/2)
+* `>>{expr}` - bitwise right shift (/2)
 *
 * `{expr} + {expr}` - sum
 * `{expr} - {expr}` - difference
