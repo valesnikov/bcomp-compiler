@@ -1,7 +1,7 @@
 module Translate (translate) where
 
-import Control.Monad.State (State, evalState)
-import Data.Maybe (maybeToList)
+import Control.Monad.State (State, evalState, get, put)
+import Data.Maybe (fromJust, fromMaybe, isNothing, maybeToList)
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Ops
@@ -31,7 +31,60 @@ translateStmt stmt = case stmt of
   (SBlock stmts) -> concat <$> mapM translateStmt stmts
   (SMark mark) -> pure [OP_LABEL $ getMarkName mark]
   (SGoto mark) -> pure [OP_JUMP . AddrAbs $ getMarkName mark]
-  _ -> error "Unimplemented"
+  (SIf lexpr ifB mbElseB) -> translateIf lexpr ifB mbElseB
+  (SWhile lexpr block) -> do
+    mark <- nextBranchLabel
+    let bodyWithJump = SBlock [block, SGoto mark]
+    body <- translateStmt $ SIf lexpr bodyWithJump Nothing
+    return $ OP_LABEL (getMarkName mark) : body
+
+translateIf :: LExpr -> Stmt -> Maybe Stmt -> State Integer BevmAst
+translateIf = f
+  where
+    f le ifB mbElseB = case le of
+      LTrue -> translateStmt ifB
+      LFalse -> translateStmt $ fromMaybe (SBlock []) mbElseB
+      LOpEq a b -> perCond a b ifB mbElseB [OP_BNE]
+      LOpNeq a b -> perCond a b ifB mbElseB [OP_BEQ]
+      LOpLt a b -> perCond a b ifB mbElseB [OP_BGE]
+      LOpGe a b -> perCond a b ifB mbElseB [OP_BLT]
+      LOpGt a b -> perCond a b ifB mbElseB [OP_BEQ, OP_BLT]
+      LOpLe a b -> f (LOpGt a b) (fromMaybe (SBlock []) mbElseB) (Just ifB)
+
+    perCond e1 e2 ifB mbElseB cnds = do
+      let cond = translateLexpr e1 e2
+      m1 <- nextBranchLabel
+      ifBody <- translateStmt ifB
+      if isNothing mbElseB || Just (SBlock []) == mbElseB
+        then do
+          return $ cond ++ map (\x -> x m1) cnds ++ ifBody ++ [OP_LABEL m1]
+        else do
+          elseBody <- translateStmt $ fromJust mbElseB
+          m2 <- nextBranchLabel
+          return $
+            cond
+              ++ map (\x -> x m1) cnds
+              ++ ifBody
+              ++ [OP_JUMP (AddrAbs m2)]
+              ++ [OP_LABEL m1]
+              ++ elseBody
+              ++ [OP_LABEL m2]
+
+nextBranchLabel :: State Integer String
+nextBranchLabel = do
+  i <- get
+  put $ i + 1
+  return $ "l_" ++ show i
+
+translateLexpr :: Expr -> Expr -> BevmAst
+translateLexpr a' b' = case (a', b') of
+  (EConst 0, a) -> translateExpr a
+  (a, EConst 0) -> translateExpr a
+  (a, EConst v) -> translateExpr a ++ [OP_CMP $ constAddr v]
+  (EConst v, a) -> translateExpr a ++ [OP_CMP $ constAddr v]
+  (a, EIdent v) -> translateExpr a ++ [OP_CMP $ AddrAbs v]
+  (EIdent v, a) -> translateExpr a ++ [OP_CMP $ AddrAbs v]
+  (a, b) -> translateExpr b ++ [OP_PUSH] ++ translateExpr a ++ [OP_CMP $ AddrStk 0] ++ pop_
 
 translateExpr :: Expr -> BevmAst
 translateExpr = f
@@ -81,7 +134,7 @@ pop_ = [OP_SWAP, OP_POP]
 mkConstants :: Stmt -> BevmAst
 mkConstants stmt =
   concatMap
-    (\c -> [OP_LABEL (getConstName c), OP_WORD (CWord (fromInteger c))])
+    (\c -> [OP_LABEL $ getConstName c, OP_WORD . CWord $ fromInteger c])
     constants
   where
     constants = getConstants stmt
@@ -89,7 +142,7 @@ mkConstants stmt =
 mkVars :: Stmt -> BevmAst
 mkVars stmt =
   concatMap
-    (\(c, mbV) -> [OP_LABEL c, OP_WORD (f mbV)])
+    (\(c, mbV) -> [OP_LABEL c, OP_WORD $ f mbV])
     vars
   where
     vars = getVars stmt

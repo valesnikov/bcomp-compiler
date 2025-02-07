@@ -1,7 +1,7 @@
 module Optimize (preEvaluate, postOptimize) where
 
 import Data.Bits (Bits (complement, (.&.), (.|.)))
-import Ops (Addr (AddrFwd), BevmAst, Op (..))
+import Ops (Addr (AddrAbs, AddrFwd), BevmAst, Op (..))
 import Parse (Expr (..), LExpr (..), Stmt (..))
 
 preEvaluate :: Stmt -> Stmt
@@ -117,14 +117,23 @@ exprDisclosure = f
       (ELoad _) -> ex
 
 postOptimize :: BevmAst -> BevmAst
-postOptimize = reverse . po []
+postOptimize = reverse . f []
   where
-    po :: BevmAst -> BevmAst -> BevmAst
-    po acc (OP_ADD (AddrFwd 1) : xs) = po (OP_INC : acc) xs
-    po acc (OP_SUB (AddrFwd 1) : xs) = po (OP_DEC : acc) xs
-    po acc ((OP_ST x) : (OP_LD y) : xs) =
+    f :: BevmAst -> BevmAst -> BevmAst
+    f acc (OP_ADD (AddrFwd 1) : xs) = f (OP_INC : acc) xs
+    f acc (OP_SUB (AddrFwd 1) : xs) = f (OP_DEC : acc) xs
+    f acc (OP_ADD (AddrFwd (-1)) : xs) = f (OP_DEC : acc) xs
+    f acc (OP_SUB (AddrFwd (-1)) : xs) = f (OP_INC : acc) xs
+    f acc (OP_ADD (AddrFwd 0) : xs) = f acc xs
+    f acc (OP_SUB (AddrFwd 0) : xs) = f acc xs
+    f acc (OP_OR (AddrFwd 0) : xs) = f acc xs
+    f acc (OP_JUMP (AddrAbs a) : OP_LABEL b : xs) =
+      if a == b
+        then f (OP_LABEL b : acc) xs
+        else f (OP_LABEL b : OP_JUMP (AddrAbs a) : acc) xs
+    f acc ((OP_ST x) : (OP_LD y) : xs) =
       if x == y
-        then po (OP_ST x : acc) xs
-        else po (OP_LD y : OP_ST x : acc) xs
-    po acc (x : xs) = po (x : acc) xs
-    po acc [] = acc
+        then f (OP_ST x : acc) xs
+        else f (OP_LD y : OP_ST x : acc) xs
+    f acc (x : xs) = f (x : acc) xs
+    f acc [] = acc

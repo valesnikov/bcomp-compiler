@@ -140,16 +140,16 @@ instance Show Op where
   show (OP_JUMP a) = "JUMP " ++ show a
   show (OP_CALL a) = "CALL " ++ show a
   show (OP_ST a) = "ST " ++ show a
-  show (OP_BEQ l) = "BEQ " ++ show l
-  show (OP_BNE l) = "BNE " ++ show l
-  show (OP_BMI l) = "BMI " ++ show l
-  show (OP_BPL l) = "BPL " ++ show l
-  show (OP_BHIS l) = "BHIS " ++ show l
-  show (OP_BLO l) = "BLO " ++ show l
-  show (OP_BVS l) = "BVS " ++ show l
-  show (OP_BVC l) = "BVC " ++ show l
-  show (OP_BGE l) = "BGE " ++ show l
-  show (OP_BLT l) = "BLT " ++ show l
+  show (OP_BEQ l) = "BEQ " ++ l
+  show (OP_BNE l) = "BNE " ++ l
+  show (OP_BMI l) = "BMI " ++ l
+  show (OP_BPL l) = "BPL " ++ l
+  show (OP_BHIS l) = "BHIS " ++ l
+  show (OP_BLO l) = "BLO " ++ l
+  show (OP_BVS l) = "BVS " ++ l
+  show (OP_BVC l) = "BVC " ++ l
+  show (OP_BGE l) = "BGE " ++ l
+  show (OP_BLT l) = "BLT " ++ l
 
 showOps :: BevmAst -> String
 showOps = foldr f ""

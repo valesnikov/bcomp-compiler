@@ -21,7 +21,15 @@ Go-like syntax
 a := 3
 b := 45
 
-a = <<a + (a & b) - (a | b) + >>a + (-a) + ~b
+while a <= 6 {
+    a = a + 2
+}
+
+if a != 16 {
+    a = <<a + (a & b) - (a | b) + >>a + (-a) + ~b
+} else {
+    a = -4
+}
 
 goto skip
 a = 0
@@ -36,6 +44,16 @@ All values represent integer signed 16 bit numbers (int16)
 * `goto {label}` - continues execution from the given label
 * `{label}:` - label to which goto jumps
 * `return {expr}` - puts the result of the expression into the AC register and stops execution with HLT
+* `if {logic_expr} {stmts} [else {stmts}] ` - conditional execution
+* `while {logic_expr} {stmts}` - preconditioned loop
+
+### Logic expressions
+* `{expr} == {expr}` - equally
+* `{expr} != {expr}` - not equal
+* `{expr} > {expr}` - greater
+* `{expr} < {expr}` - lower
+* `{expr} >= {expr}` - greater or equally
+* `{expr} <= {expr}` - lower or equally
 
 ### Expressions (prioritized)
 * `+{expr}` - does nothing
@@ -49,5 +67,3 @@ All values represent integer signed 16 bit numbers (int16)
 *
 * `{expr} | {expr}` - bitwise or 
 * `{expr} & {expr}` - bitwise and
-
-_Loops and branching will be added soon_
