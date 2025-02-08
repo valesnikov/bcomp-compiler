@@ -39,8 +39,34 @@ lexer :: Token.TokenParser ()
 lexer =
   Token.makeTokenParser
     emptyDef
-      { Token.reservedNames = ["if", "else", "while", "return", "true", "false", "goto"],
-        Token.reservedOpNames = [":", "*", "~", "<<", ">>", "+", "-", "|", "&", "=", ":=", "==", "!=", "<", ">", "<=", ">="]
+      { Token.reservedNames =
+          [ "if",
+            "else",
+            "while",
+            "return",
+            "true",
+            "false",
+            "goto"
+          ],
+        Token.reservedOpNames =
+          [ ":",
+            "*",
+            "~",
+            "<<",
+            ">>",
+            "+",
+            "-",
+            "|",
+            "&",
+            "=",
+            ":=",
+            "==",
+            "!=",
+            "<",
+            ">",
+            "<=",
+            ">="
+          ]
       }
 
 identifier :: Parser String

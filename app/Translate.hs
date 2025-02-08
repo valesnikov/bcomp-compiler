@@ -16,12 +16,14 @@ import Parse
     Stmt (..),
   )
 
+type Translator a = State Integer a
+
 translate :: Stmt -> BevmAst
 translate s = if last bevm /= OP_HLT then bevm ++ [OP_HLT] else bevm
   where
     bevm = mkConstants s ++ mkVars s ++ [OP_LABEL "START"] ++ evalState (translateStmt s) 0
 
-translateStmt :: Stmt -> State Integer BevmAst
+translateStmt :: Stmt -> Translator BevmAst
 translateStmt stmt = case stmt of
   (SAssign _ (EConst _)) -> pure [] -- is determined during initialization
   (SAssign v e) -> translateStmt $ SMod v e
@@ -29,16 +31,16 @@ translateStmt stmt = case stmt of
   (SReturn expr) -> pure $ translateExpr expr ++ [OP_HLT]
   (SStore _ _) -> error "The BEVM has terrible addressing, no pointers yet"
   (SBlock stmts) -> concat <$> mapM translateStmt stmts
-  (SMark mark) -> pure [OP_LABEL $ getMarkName mark]
-  (SGoto mark) -> pure [OP_JUMP . AddrAbs $ getMarkName mark]
+  (SMark mark) -> pure [OP_LABEL  mark]
+  (SGoto mark) -> pure [OP_JUMP . AddrAbs $ mark]
   (SIf lexpr ifB mbElseB) -> translateIf lexpr ifB mbElseB
   (SWhile lexpr block) -> do
     mark <- nextBranchLabel
     let bodyWithJump = SBlock [block, SGoto mark]
     body <- translateStmt $ SIf lexpr bodyWithJump Nothing
-    return $ OP_LABEL (getMarkName mark) : body
+    return $ OP_LABEL mark : body
 
-translateIf :: LExpr -> Stmt -> Maybe Stmt -> State Integer BevmAst
+translateIf :: LExpr -> Stmt -> Maybe Stmt -> Translator BevmAst
 translateIf = f
   where
     f le ifB mbElseB = case le of
@@ -70,7 +72,7 @@ translateIf = f
               ++ elseBody
               ++ [OP_LABEL m2]
 
-nextBranchLabel :: State Integer String
+nextBranchLabel :: Translator String
 nextBranchLabel = do
   i <- get
   put $ i + 1
@@ -204,6 +206,3 @@ getConstants = go
 
 getConstName :: Integer -> String
 getConstName val = "c_" ++ show val
-
-getMarkName :: String -> String
-getMarkName s = "m_" ++ s

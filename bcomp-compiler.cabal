@@ -29,8 +29,8 @@ executable bcompc
     Translate
 
   build-depends:
-    , containers  >=0.6    && <1
-    , mtl         >=2      && <3
-    , parsec      >=3.1.18 && <4
+    , containers  <1
+    , mtl         >=2 && <3
+    , parsec      >=3 && <4
 
   hs-source-dirs: app

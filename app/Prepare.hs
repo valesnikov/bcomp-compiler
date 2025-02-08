@@ -22,8 +22,8 @@ unblockVars' vmp x = case x of
   (SReturn expr) -> SReturn $ forExpr vmp expr
   (SStore e1 e2) -> SStore (forExpr vmp e1) (forExpr vmp e2)
   (SAssign _ _) -> error "Declarations are considered in the context of the parent block"
-  (SGoto _) -> x
-  (SMark _) -> x
+  (SGoto s) -> SGoto $ "m_" ++ s
+  (SMark s) -> SMark $ "m_" ++ s
 
 inBlock :: VMap -> [Stmt] -> [Stmt]
 inBlock vmp' = reverse . fst . foldl f ([], vmp')
