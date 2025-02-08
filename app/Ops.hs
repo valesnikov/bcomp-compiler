@@ -3,7 +3,7 @@ module Ops where
 import Data.Int (Int16, Int8)
 import Data.List (intercalate)
 
-type BevmAst = [Op]
+type BcompAsm = [Op]
 
 type Label = String
 
@@ -151,8 +151,8 @@ instance Show Op where
   show (OP_BGE l) = "BGE " ++ l
   show (OP_BLT l) = "BLT " ++ l
 
-showOps :: BevmAst -> String
-showOps = foldr f ""
+showAsm :: BcompAsm -> String
+showAsm = foldr f ""
   where
     f (OP_LABEL l) s = (l ++ ":\n") ++ s
     f op s = ("    " ++ show op ++ "\n") ++ s

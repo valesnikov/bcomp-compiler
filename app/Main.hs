@@ -1,6 +1,6 @@
 module Main where
 
-import Ops (showOps)
+import Ops (showAsm)
 import Optimize (postOptimize, preEvaluate)
 import Parse (parseProgramm)
 import Prepare (unblockVars)
@@ -15,7 +15,7 @@ main = do
     inpuFile : _ -> readFile inpuFile
     _ -> getContents
 
-  let a = showOps . postOptimize . translate . unblockVars . preEvaluate <$> parseProgramm "" str
+  let a = showAsm . postOptimize . translate . unblockVars . preEvaluate <$> parseProgramm "" str
 
   case a of
     Left err -> hPrint stderr err

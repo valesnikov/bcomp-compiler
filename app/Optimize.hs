@@ -1,7 +1,7 @@
 module Optimize (preEvaluate, postOptimize) where
 
 import Data.Bits (Bits (complement, (.&.), (.|.)))
-import Ops (Addr (AddrAbs, AddrFwd), BevmAst, Op (..))
+import Ops (Addr (AddrAbs, AddrFwd), BcompAsm, Op (..))
 import Parse (Expr (..), LExpr (..), Stmt (..))
 
 preEvaluate :: Stmt -> Stmt
@@ -116,24 +116,47 @@ exprDisclosure = f
       (EIdent _) -> ex
       (ELoad _) -> ex
 
-postOptimize :: BevmAst -> BevmAst
-postOptimize = reverse . f []
+postOptimize :: BcompAsm -> BcompAsm
+postOptimize = singlePassOpt . afterJumpOpt
+
+removeUnusedLabels :: BcompAsm -> BcompAsm
+removeUnusedLabels = error "TODO"
+
+afterJumpOpt :: BcompAsm -> BcompAsm
+afterJumpOpt = removeBetweenJumps
   where
-    f :: BevmAst -> BevmAst -> BevmAst
-    f acc (OP_ADD (AddrFwd 1) : xs) = f (OP_INC : acc) xs
-    f acc (OP_SUB (AddrFwd 1) : xs) = f (OP_DEC : acc) xs
-    f acc (OP_ADD (AddrFwd (-1)) : xs) = f (OP_DEC : acc) xs
-    f acc (OP_SUB (AddrFwd (-1)) : xs) = f (OP_INC : acc) xs
-    f acc (OP_ADD (AddrFwd 0) : xs) = f acc xs
-    f acc (OP_SUB (AddrFwd 0) : xs) = f acc xs
-    f acc (OP_OR (AddrFwd 0) : xs) = f acc xs
-    f acc (OP_JUMP (AddrAbs a) : OP_LABEL b : xs) =
-      if a == b
-        then f (OP_LABEL b : acc) xs
-        else f (OP_LABEL b : OP_JUMP (AddrAbs a) : acc) xs
-    f acc ((OP_ST x) : (OP_LD y) : xs) =
-      if x == y
-        then f (OP_ST x : acc) xs
-        else f (OP_LD y : OP_ST x : acc) xs
-    f acc (x : xs) = f (x : acc) xs
-    f acc [] = acc
+    removeBetweenJumps [] = []
+    removeBetweenJumps (OP_JUMP (AddrAbs a) : xs) = OP_JUMP (AddrAbs a) : skipUntilLabel xs
+    removeBetweenJumps (x:xs) = x : removeBetweenJumps xs
+
+    skipUntilLabel [] = []
+    skipUntilLabel (OP_LABEL s : xs) = OP_LABEL s : removeBetweenJumps xs
+    skipUntilLabel (_ : xs) = skipUntilLabel xs
+
+singlePassOpt :: BcompAsm -> BcompAsm
+singlePassOpt = f
+  where
+    f :: BcompAsm -> BcompAsm
+    f [] = []
+    -- jump to the same place
+    f (OP_JUMP (AddrAbs a) : OP_LABEL b : xs) =
+      if a == b then OP_LABEL b : f xs else OP_JUMP (AddrAbs a) : OP_LABEL b : f xs
+    -- useless loading
+    f (OP_ST a : OP_LD b : xs) =
+      if a == b then f $ OP_ST a : xs else OP_ST a : OP_LD b : f xs
+    --
+    f (OP_ST a : OP_ST b : xs) =
+      if a == b then  f $ OP_ST a : xs else OP_ST a : OP_ST b : f xs
+    -- remove addition with 0 (ignore OR #0 because it clean V flag)
+    f (OP_ADD (AddrFwd 0) : xs) = f xs
+    f (OP_SUB (AddrFwd 0) : xs) = f xs
+    f (OP_CMP (AddrFwd 0) : xs) = f xs
+    -- easier AC cleaning
+    f (OP_AND (AddrFwd 0) : xs) = OP_CLA : f xs
+    f (OP_LD (AddrFwd 0) : xs) = OP_CLA : f xs
+    -- simplification to INC, DEC
+    f (OP_ADD (AddrFwd 1) : xs) = OP_INC : f xs
+    f (OP_SUB (AddrFwd 1) : xs) = OP_DEC : f xs
+    f (OP_ADD (AddrFwd (-1)) : xs) = OP_DEC : f xs
+    f (OP_SUB (AddrFwd (-1)) : xs) = OP_INC : f xs
+    f (x : xs) = x : f xs

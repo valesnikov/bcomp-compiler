@@ -14,9 +14,12 @@ homepage:        https://github.com/valesnikov/bcomp-compiler
 bug-reports:     https://github.com/valesnikov/bcomp-compiler/issues
 
 common build-directives
-  build-depends:    base >=4.16 && <5
-  ghc-options:      -Wall
-  default-language: GHC2021
+  build-depends:      base >=4.16 && <5
+  ghc-options:        -Wall
+  default-language:   GHC2021
+  default-extensions: 
+    OverloadedStrings,
+    LambdaCase
 
 executable bcompc
   import:         build-directives

@@ -6,7 +6,7 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Ops
   ( Addr (..),
-    BevmAst,
+    BcompAsm,
     CWord (..),
     Op (..),
   )
@@ -18,12 +18,12 @@ import Parse
 
 type Translator a = State Integer a
 
-translate :: Stmt -> BevmAst
+translate :: Stmt -> BcompAsm
 translate s = if last bevm /= OP_HLT then bevm ++ [OP_HLT] else bevm
   where
     bevm = mkConstants s ++ mkVars s ++ [OP_LABEL "START"] ++ evalState (translateStmt s) 0
 
-translateStmt :: Stmt -> Translator BevmAst
+translateStmt :: Stmt -> Translator BcompAsm
 translateStmt stmt = case stmt of
   (SAssign _ (EConst _)) -> pure [] -- is determined during initialization
   (SAssign v e) -> translateStmt $ SMod v e
@@ -31,16 +31,16 @@ translateStmt stmt = case stmt of
   (SReturn expr) -> pure $ translateExpr expr ++ [OP_HLT]
   (SStore _ _) -> error "The BEVM has terrible addressing, no pointers yet"
   (SBlock stmts) -> concat <$> mapM translateStmt stmts
-  (SMark mark) -> pure [OP_LABEL  mark]
-  (SGoto mark) -> pure [OP_JUMP . AddrAbs $ mark]
+  (SMark mark) -> pure [OP_LABEL mark]
+  (SGoto mark) -> pure [OP_JUMP $ AddrAbs mark]
   (SIf lexpr ifB mbElseB) -> translateIf lexpr ifB mbElseB
   (SWhile lexpr block) -> do
-    mark <- nextBranchLabel
+    mark <- uniqueBranchLabel
     let bodyWithJump = SBlock [block, SGoto mark]
     body <- translateStmt $ SIf lexpr bodyWithJump Nothing
     return $ OP_LABEL mark : body
 
-translateIf :: LExpr -> Stmt -> Maybe Stmt -> Translator BevmAst
+translateIf :: LExpr -> Stmt -> Maybe Stmt -> Translator BcompAsm
 translateIf = f
   where
     f le ifB mbElseB = case le of
@@ -55,14 +55,14 @@ translateIf = f
 
     perCond e1 e2 ifB mbElseB cnds = do
       let cond = translateLexpr e1 e2
-      m1 <- nextBranchLabel
+      m1 <- uniqueBranchLabel
       ifBody <- translateStmt ifB
       if isNothing mbElseB || Just (SBlock []) == mbElseB
         then do
           return $ cond ++ map (\x -> x m1) cnds ++ ifBody ++ [OP_LABEL m1]
         else do
           elseBody <- translateStmt $ fromJust mbElseB
-          m2 <- nextBranchLabel
+          m2 <- uniqueBranchLabel
           return $
             cond
               ++ map (\x -> x m1) cnds
@@ -72,13 +72,13 @@ translateIf = f
               ++ elseBody
               ++ [OP_LABEL m2]
 
-nextBranchLabel :: Translator String
-nextBranchLabel = do
+uniqueBranchLabel :: Translator String
+uniqueBranchLabel = do
   i <- get
   put $ i + 1
   return $ "l_" ++ show i
 
-translateLexpr :: Expr -> Expr -> BevmAst
+translateLexpr :: Expr -> Expr -> BcompAsm
 translateLexpr a' b' = case (a', b') of
   (EConst 0, a) -> translateExpr a
   (a, EConst 0) -> translateExpr a
@@ -88,7 +88,7 @@ translateLexpr a' b' = case (a', b') of
   (EIdent v, a) -> translateExpr a ++ [OP_CMP $ AddrAbs v]
   (a, b) -> translateExpr b ++ [OP_PUSH] ++ translateExpr a ++ [OP_CMP $ AddrStk 0] ++ pop_
 
-translateExpr :: Expr -> BevmAst
+translateExpr :: Expr -> BcompAsm
 translateExpr = f
   where
     f expr = case expr of
@@ -130,10 +130,10 @@ constAddr v
   | -128 <= v && v <= 127 = AddrFwd (fromInteger v)
   | otherwise = AddrAbs $ getConstName v
 
-pop_ :: BevmAst
+pop_ :: BcompAsm
 pop_ = [OP_SWAP, OP_POP]
 
-mkConstants :: Stmt -> BevmAst
+mkConstants :: Stmt -> BcompAsm
 mkConstants stmt =
   concatMap
     (\c -> [OP_LABEL $ getConstName c, OP_WORD . CWord $ fromInteger c])
@@ -141,7 +141,7 @@ mkConstants stmt =
   where
     constants = getConstants stmt
 
-mkVars :: Stmt -> BevmAst
+mkVars :: Stmt -> BcompAsm
 mkVars stmt =
   concatMap
     (\(c, mbV) -> [OP_LABEL c, OP_WORD $ f mbV])
