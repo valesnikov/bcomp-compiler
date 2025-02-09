@@ -31,14 +31,14 @@ translateStmt stmt = case stmt of
   (SReturn expr) -> pure $ translateExpr expr ++ [OP_HLT]
   (SStore _ _) -> error "The BEVM has terrible addressing, no pointers yet"
   (SBlock stmts) -> concat <$> mapM translateStmt stmts
-  (SMark mark) -> pure [OP_LABEL mark]
-  (SGoto mark) -> pure [OP_JUMP $ AddrAbs mark]
+  (SLabel label) -> pure [OP_LABEL label]
+  (SGoto label) -> pure [OP_JUMP $ AddrAbs label]
   (SIf lexpr ifB mbElseB) -> translateIf lexpr ifB mbElseB
   (SWhile lexpr block) -> do
-    mark <- uniqueBranchLabel
-    let bodyWithJump = SBlock [block, SGoto mark]
+    label <- uniqueBranchLabel
+    let bodyWithJump = SBlock [block, SGoto label]
     body <- translateStmt $ SIf lexpr bodyWithJump Nothing
-    return $ OP_LABEL mark : body
+    return $ OP_LABEL label : body
 
 translateIf :: LExpr -> Stmt -> Maybe Stmt -> Translator BcompAsm
 translateIf = f
@@ -179,7 +179,7 @@ getConstants = go
       (SReturn expr) -> fromExpr expr
       (SStore ex1 ex2) -> Set.union (fromExpr ex1) (fromExpr ex2)
       (SBlock stmts) -> Set.unions $ map getConstants stmts
-      (SMark _) -> Set.empty
+      (SLabel _) -> Set.empty
       (SGoto _) -> Set.empty
 
     fromLexpr x = case x of

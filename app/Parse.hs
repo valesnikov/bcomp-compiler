@@ -151,14 +151,14 @@ data Stmt
   | SReturn Expr
   | SStore Expr Expr
   | SGoto String
-  | SMark String
+  | SLabel String
   deriving (Show, Eq)
 
 stmt :: Parser Stmt
 stmt =
   try blockStmt
     <|> try gotoStmt
-    <|> try markStmt
+    <|> try labelStmt
     <|> try assignStmt
     <|> try modifyStmt
     <|> try storeStmt
@@ -171,11 +171,11 @@ gotoStmt = do
   _ <- reserved "goto"
   SGoto <$> identifier
 
-markStmt :: Parser Stmt
-markStmt = do
-  mark <- identifier
+labelStmt :: Parser Stmt
+labelStmt = do
+  label <- identifier
   _ <- reservedOp ":"
-  return $ SMark mark
+  return $ SLabel label
 
 assignStmt :: Parser Stmt
 assignStmt = do
