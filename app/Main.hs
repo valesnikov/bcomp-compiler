@@ -1,9 +1,9 @@
 module Main where
 
-import Ops (showAsm)
+import Bcomp (showAsm)
 import Optimize (postOptimize, preEvaluate)
 import Parse (parseProgramm)
-import Prepare (unblockVars)
+import Prepare (renameVars)
 import System.Environment (getArgs)
 import System.IO (hPrint, stderr)
 import Translate (translate)
@@ -15,7 +15,7 @@ main = do
     inpuFile : _ -> readFile inpuFile
     _ -> getContents
 
-  let a = showAsm . postOptimize . translate . unblockVars . preEvaluate <$> parseProgramm "" str
+  let a = showAsm . postOptimize . translate . renameVars . preEvaluate <$> parseProgramm "" str
 
   case a of
     Left err -> hPrint stderr err

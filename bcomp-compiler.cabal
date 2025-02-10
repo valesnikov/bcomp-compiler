@@ -25,7 +25,7 @@ executable bcompc
   import:         build-directives
   main-is:        Main.hs
   other-modules:
-    Ops
+    Bcomp
     Optimize
     Parse
     Prepare

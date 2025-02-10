@@ -1,46 +1,46 @@
 module Translate (translate) where
 
+import Bcomp
+  ( Addr (..),
+    BcompAsm,
+    CData (..),
+    Op (..),
+  )
 import Control.Monad.State (State, evalState, get, put)
 import Data.Maybe (fromJust, fromMaybe, isNothing, maybeToList)
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Ops
-  ( Addr (..),
-    BcompAsm,
-    CWord (..),
-    Op (..),
-  )
 import Parse
   ( Expr (..),
-    LExpr (..),
+    LogicExpr (..),
     Stmt (..),
   )
 
 type Translator a = State Integer a
 
 translate :: Stmt -> BcompAsm
-translate s = if last bevm /= OP_HLT then bevm ++ [OP_HLT] else bevm
+translate s = if last asm /= OP_HLT then asm ++ [OP_HLT] else asm
   where
-    bevm = mkConstants s ++ mkVars s ++ [OP_LABEL "START"] ++ evalState (translateStmt s) 0
+    asm = mkConstants s ++ mkVars s ++ [OP_LABEL "START"] ++ evalState (translateStmt s) 0
 
 translateStmt :: Stmt -> Translator BcompAsm
 translateStmt stmt = case stmt of
-  (SAssign _ (EConst _)) -> pure [] -- is determined during initialization
+  (SAssign _ (EConst _)) -> return [] -- is determined during initialization
   (SAssign v e) -> translateStmt $ SMod v e
-  (SMod var expr) -> pure $ translateExpr expr ++ [OP_ST $ AddrAbs var]
-  (SReturn expr) -> pure $ translateExpr expr ++ [OP_HLT]
+  (SMod var expr) -> return $ translateExpr expr ++ [OP_ST $ AddrAbs var]
+  (SReturn expr) -> return $ translateExpr expr ++ [OP_HLT]
   (SStore _ _) -> error "The BEVM has terrible addressing, no pointers yet"
   (SBlock stmts) -> concat <$> mapM translateStmt stmts
-  (SLabel label) -> pure [OP_LABEL label]
-  (SGoto label) -> pure [OP_JUMP $ AddrAbs label]
+  (SLabel label) -> return [OP_LABEL label]
+  (SGoto label) -> return [OP_JUMP $ AddrAbs label]
   (SIf lexpr ifB mbElseB) -> translateIf lexpr ifB mbElseB
   (SWhile lexpr block) -> do
-    label <- uniqueBranchLabel
+    label <- uniqueLabel
     let bodyWithJump = SBlock [block, SGoto label]
     body <- translateStmt $ SIf lexpr bodyWithJump Nothing
     return $ OP_LABEL label : body
 
-translateIf :: LExpr -> Stmt -> Maybe Stmt -> Translator BcompAsm
+translateIf :: LogicExpr -> Stmt -> Maybe Stmt -> Translator BcompAsm
 translateIf = f
   where
     f le ifB mbElseB = case le of
@@ -55,14 +55,14 @@ translateIf = f
 
     perCond e1 e2 ifB mbElseB cnds = do
       let cond = translateLexpr e1 e2
-      m1 <- uniqueBranchLabel
+      m1 <- uniqueLabel
       ifBody <- translateStmt ifB
       if isNothing mbElseB || Just (SBlock []) == mbElseB
         then do
           return $ cond ++ map (\x -> x m1) cnds ++ ifBody ++ [OP_LABEL m1]
         else do
           elseBody <- translateStmt $ fromJust mbElseB
-          m2 <- uniqueBranchLabel
+          m2 <- uniqueLabel
           return $
             cond
               ++ map (\x -> x m1) cnds
@@ -72,8 +72,8 @@ translateIf = f
               ++ elseBody
               ++ [OP_LABEL m2]
 
-uniqueBranchLabel :: Translator String
-uniqueBranchLabel = do
+uniqueLabel :: Translator String
+uniqueLabel = do
   i <- get
   put $ i + 1
   return $ "l_" ++ show i

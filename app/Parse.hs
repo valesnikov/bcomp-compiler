@@ -1,13 +1,13 @@
 module Parse
   ( Expr (..),
-    LExpr (..),
+    LogicExpr (..),
     Stmt (..),
     parseProgramm,
   )
 where
 
 import Control.Applicative ((<|>))
-import Text.Parsec (many, optionMaybe, try)
+import Text.Parsec (choice, many, optionMaybe, try)
 import Text.Parsec.Char (char)
 import Text.Parsec.Combinator (eof)
 import Text.Parsec.Error (ParseError)
@@ -22,8 +22,8 @@ import Text.Parsec.String (Parser)
 import Text.Parsec.Token qualified as Token
 
 data Expr
-  = EConst Integer
-  | EIdent String
+  = EConst Integer -- literal
+  | EIdent String -- variable identifier
   | ELoad Expr -- load value from address
   | EOpNeg Expr -- -ex
   | EOpAsl Expr -- <<ex
@@ -111,7 +111,7 @@ expr = buildExpressionParser table term
         <|> (EConst <$> integer)
         <|> (EIdent <$> identifier)
 
-data LExpr
+data LogicExpr
   = LTrue
   | LFalse
   | LOpEq Expr Expr -- (ex1 == ex2)
@@ -125,7 +125,7 @@ data LExpr
 applyM :: (Functor f) => t -> f (t -> b) -> f b
 applyM val = fmap (\x -> x val)
 
-lexpr :: Parser LExpr
+lexpr :: Parser LogicExpr
 lexpr =
   (LTrue <$ reserved "true")
     <|> (LFalse <$ reserved "false")
@@ -145,8 +145,8 @@ lexpr =
 data Stmt
   = SAssign String Expr
   | SMod String Expr
-  | SIf LExpr Stmt (Maybe Stmt)
-  | SWhile LExpr Stmt
+  | SIf LogicExpr Stmt (Maybe Stmt)
+  | SWhile LogicExpr Stmt
   | SBlock [Stmt]
   | SReturn Expr
   | SStore Expr Expr
@@ -156,15 +156,19 @@ data Stmt
 
 stmt :: Parser Stmt
 stmt =
-  try blockStmt
-    <|> try gotoStmt
-    <|> try labelStmt
-    <|> try assignStmt
-    <|> try modifyStmt
-    <|> try storeStmt
-    <|> try returnStmt
-    <|> try ifStmt
-    <|> try whileStmt
+  choice $
+    fmap
+      try
+      [ blockStmt,
+        storeStmt,
+        gotoStmt,
+        returnStmt,
+        ifStmt,
+        whileStmt,
+        labelStmt,
+        assignStmt,
+        modifyStmt
+      ]
 
 gotoStmt :: Parser Stmt
 gotoStmt = do
@@ -192,9 +196,9 @@ modifyStmt = do
 storeStmt :: Parser Stmt
 storeStmt = do
   _ <- reservedOp "*"
-  var <- expr
+  addr <- expr
   reservedOp "="
-  SStore var <$> expr
+  SStore addr <$> expr
 
 returnStmt :: Parser Stmt
 returnStmt = do
@@ -205,9 +209,9 @@ ifStmt :: Parser Stmt
 ifStmt = do
   reserved "if"
   cond <- lexpr
-  body <- blockStmt
-  elsePart <- optionMaybe (reserved "else" >> blockStmt)
-  return (SIf cond body elsePart)
+  ifPart <- blockStmt
+  elsePart <- optionMaybe (reserved "else" >> (blockStmt <|> ifStmt))
+  return (SIf cond ifPart elsePart)
 
 whileStmt :: Parser Stmt
 whileStmt = do
@@ -225,7 +229,6 @@ blockStmt = do
   whiteSpace
   return stmts
 
--- Парсим весь код
 program :: Parser Stmt
 program = whiteSpace >> SBlock <$> many stmt <* eof
 

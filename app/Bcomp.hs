@@ -1,4 +1,4 @@
-module Ops where
+module Bcomp where
 
 import Data.Int (Int16, Int8)
 import Data.List (intercalate)
@@ -20,23 +20,23 @@ data Addr
 instance Show Addr where
   show :: Addr -> String
   show (AddrAbs l) = "$" ++ l
-  show (AddrRel l) = show l
+  show (AddrRel l) = l
   show (AddrInd l) = "(" ++ l ++ ")"
   show (AddrIndI l) = "(" ++ l ++ ")+"
   show (AddrIndD l) = "-(" ++ l ++ ")"
   show (AddrStk i) = "&" ++ show i
   show (AddrFwd i) = "#" ++ show i
 
-data CWord
-  = CWord Int16
-  | CWordUnd
-  | CWordArr [Int16]
-  | CWordDup Int Int16
-  | CWordDupUnd Int
+data CData
+  = CWord Int16 -- Initialization with a value
+  | CWordUnd -- Reservation without initialization
+  | CWordArr [Int16] -- Initialization with a array
+  | CWordDup Int Int16 -- Initialization with a repeated value
+  | CWordDupUnd Int -- Reservation 'n' words without initialization
   deriving (Eq)
 
-instance Show CWord where
-  show :: CWord -> String
+instance Show CData where
+  show :: CData -> String
   show (CWord i) = "WORD " ++ show i
   show CWordUnd = "WORD ?"
   show (CWordArr arr) = "WORD " ++ intercalate "," (map show arr)
@@ -45,8 +45,8 @@ instance Show CWord where
 
 data Op
   = OP_ORG Int
-  | OP_LABEL Label -- LABEl: ...
-  | OP_WORD CWord
+  | OP_LABEL Label -- Label: ...
+  | OP_WORD CData
   | OP_NOP
   | OP_HLT
   | OP_CLA

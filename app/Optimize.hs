@@ -1,8 +1,8 @@
 module Optimize (preEvaluate, postOptimize) where
 
+import Bcomp (Addr (AddrAbs, AddrFwd), BcompAsm, Op (..))
 import Data.Bits (Bits (complement, (.&.), (.|.)))
-import Ops (Addr (AddrAbs, AddrFwd), BcompAsm, Op (..))
-import Parse (Expr (..), LExpr (..), Stmt (..))
+import Parse (Expr (..), LogicExpr (..), Stmt (..))
 
 preEvaluate :: Stmt -> Stmt
 preEvaluate stmt
@@ -32,11 +32,11 @@ evalStmt x = case x of
   (SGoto _) -> x
 
 inBlockEval :: [Stmt] -> [Stmt]
-inBlockEval = map evalStmt . filter (/= SBlock []) . trimToReturn []
+inBlockEval = map evalStmt . filter (/= SBlock []) . trimToReturn
   where
-    trimToReturn acc ((SReturn expr) : _) = acc ++ [SReturn expr]
-    trimToReturn acc (x : xs) = trimToReturn (acc ++ [x]) xs
-    trimToReturn acc [] = acc
+    trimToReturn ((SReturn expr) : _) = [SReturn expr]
+    trimToReturn (x : xs) = x : trimToReturn xs
+    trimToReturn [] = []
 
 evalExpr :: Expr -> Expr
 evalExpr = exprDisclosure . f
@@ -62,7 +62,7 @@ evalExpr = exprDisclosure . f
       (EOpAnd a b) -> if a == b then a else EOpAnd (f a) (f b)
       (EOpOr a b) -> if a == b then a else EOpOr (f a) (f b)
 
-evalLexpr :: LExpr -> LExpr
+evalLexpr :: LogicExpr -> LogicExpr
 evalLexpr x = case x of
   LTrue -> LTrue
   LFalse -> LFalse
@@ -117,17 +117,17 @@ exprDisclosure = f
       (ELoad _) -> ex
 
 postOptimize :: BcompAsm -> BcompAsm
-postOptimize = singlePassOpt . afterJumpOpt
+postOptimize = unusedLabelsOpt . singlePassOpt . afterJumpOpt
 
-removeUnusedLabels :: BcompAsm -> BcompAsm
-removeUnusedLabels = error "TODO"
+unusedLabelsOpt :: BcompAsm -> BcompAsm
+unusedLabelsOpt = id -- TODO
 
 afterJumpOpt :: BcompAsm -> BcompAsm
 afterJumpOpt = removeBetweenJumps
   where
     removeBetweenJumps [] = []
     removeBetweenJumps (OP_JUMP (AddrAbs a) : xs) = OP_JUMP (AddrAbs a) : skipUntilLabel xs
-    removeBetweenJumps (x:xs) = x : removeBetweenJumps xs
+    removeBetweenJumps (x : xs) = x : removeBetweenJumps xs
 
     skipUntilLabel [] = []
     skipUntilLabel (OP_LABEL s : xs) = OP_LABEL s : removeBetweenJumps xs
@@ -146,7 +146,7 @@ singlePassOpt = f
       if a == b then f $ OP_ST a : xs else OP_ST a : OP_LD b : f xs
     --
     f (OP_ST a : OP_ST b : xs) =
-      if a == b then  f $ OP_ST a : xs else OP_ST a : OP_ST b : f xs
+      if a == b then f $ OP_ST a : xs else OP_ST a : OP_ST b : f xs
     -- remove addition with 0 (ignore OR #0 because it clean V flag)
     f (OP_ADD (AddrFwd 0) : xs) = f xs
     f (OP_SUB (AddrFwd 0) : xs) = f xs
