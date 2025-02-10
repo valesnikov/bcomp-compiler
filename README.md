@@ -18,10 +18,10 @@ cabal install
 ## Language
 Go-like syntax
 ```
-a := 3
-b := 45
+a := 3 /*comment*/
+b := 45 //line comment
 
-while a <= 6 {
+while a <= 6 { 
     a = a + 2
 }
 

@@ -66,7 +66,12 @@ lexer =
             ">",
             "<=",
             ">="
-          ]
+          ],
+        Token.commentStart = "/*",
+        Token.commentEnd = "*/",
+        Token.commentLine = "//",
+        Token.nestedComments = False,
+        Token.caseSensitive = True
       }
 
 identifier :: Parser String
