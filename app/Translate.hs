@@ -25,7 +25,6 @@ translate s = if last asm /= OP_HLT then asm ++ [OP_HLT] else asm
 
 translateStmt :: Stmt -> Translator BcompAsm
 translateStmt stmt = case stmt of
-  (SAssign _ (EConst _)) -> return [] -- is determined during initialization
   (SAssign v e) -> translateStmt $ SMod v e
   (SMod var expr) -> return $ translateExpr expr ++ [OP_ST $ AddrAbs var]
   (SReturn expr) -> return $ translateExpr expr ++ [OP_HLT]
@@ -137,26 +136,19 @@ mkConstants :: Stmt -> BcompAsm
 mkConstants stmt =
   concatMap
     (\c -> [OP_LABEL $ getConstName c, OP_WORD . CWord $ fromInteger c])
-    constants
-  where
-    constants = getConstants stmt
+    (getConstants stmt)
 
 mkVars :: Stmt -> BcompAsm
 mkVars stmt =
   concatMap
-    (\(c, mbV) -> [OP_LABEL c, OP_WORD $ f mbV])
-    vars
-  where
-    vars = getVars stmt
-    f Nothing = CWordUnd
-    f (Just n) = CWord $ fromInteger n
+    (\c -> [OP_LABEL c, OP_WORD CWordUnd])
+    (getVars stmt)
 
-getVars :: Stmt -> Set (String, Maybe Integer)
+getVars :: Stmt -> Set String
 getVars = go
   where
     go x = case x of
-      (SAssign n (EConst v)) -> Set.singleton (n, Just v)
-      (SAssign n _) -> Set.singleton (n, Nothing)
+      (SAssign n _) -> Set.singleton n
       (SIf _ b1 b2) ->
         Set.unions $
           getVars b1 : maybeToList (getVars <$> b2)
