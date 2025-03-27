@@ -1,4 +1,4 @@
-module Translate (translate) where
+module Translate (translate, Translator) where
 
 import Bcomp
   ( Addr (..),
@@ -6,22 +6,22 @@ import Bcomp
     CData (..),
     Op (..),
   )
-import Control.Monad.State (State, evalState, get, put)
 import Data.Maybe (fromJust, fromMaybe, isNothing, maybeToList)
 import Data.Set (Set)
 import Data.Set qualified as Set
-import Parse
+import Defs
   ( Expr (..),
     LogicExpr (..),
     Stmt (..),
+    Translator,
   )
-
-type Translator a = State Integer a
+import Mangle (getBranchLabel)
+import Tools (runTranslator)
 
 translate :: Stmt -> BcompAsm
 translate s = if last asm /= OP_HLT then asm ++ [OP_HLT] else asm
   where
-    asm = mkConstants s ++ mkVars s ++ [OP_LABEL "START"] ++ evalState (translateStmt s) 0
+    asm = mkConstants s ++ mkVars s ++ [OP_LABEL "START"] ++ runTranslator (translateStmt s)
 
 translateStmt :: Stmt -> Translator BcompAsm
 translateStmt stmt = case stmt of
@@ -34,7 +34,7 @@ translateStmt stmt = case stmt of
   (SGoto label) -> return [OP_JUMP $ AddrAbs label]
   (SIf lexpr ifB mbElseB) -> translateIf lexpr ifB mbElseB
   (SWhile lexpr block) -> do
-    label <- uniqueLabel
+    label <- getBranchLabel
     let bodyWithJump = SBlock [block, SGoto label]
     body <- translateStmt $ SIf lexpr bodyWithJump Nothing
     return $ OP_LABEL label : body
@@ -54,14 +54,14 @@ translateIf = f
 
     perCond e1 e2 ifB mbElseB cnds = do
       let cond = translateLexpr e1 e2
-      m1 <- uniqueLabel
+      m1 <- getBranchLabel
       ifBody <- translateStmt ifB
       if isNothing mbElseB || Just (SBlock []) == mbElseB
         then do
           return $ cond ++ map (\x -> x m1) cnds ++ ifBody ++ [OP_LABEL m1]
         else do
           elseBody <- translateStmt $ fromJust mbElseB
-          m2 <- uniqueLabel
+          m2 <- getBranchLabel
           return $
             cond
               ++ map (\x -> x m1) cnds
@@ -70,12 +70,6 @@ translateIf = f
               ++ [OP_LABEL m1]
               ++ elseBody
               ++ [OP_LABEL m2]
-
-uniqueLabel :: Translator String
-uniqueLabel = do
-  i <- get
-  put $ i + 1
-  return $ "l_" ++ show i
 
 translateLexpr :: Expr -> Expr -> BcompAsm
 translateLexpr a' b' = case (a', b') of

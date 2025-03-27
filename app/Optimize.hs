@@ -2,7 +2,7 @@ module Optimize (preEvaluate, postOptimize) where
 
 import Bcomp (Addr (AddrAbs, AddrFwd), BcompAsm, Op (..))
 import Data.Bits (Bits (complement, (.&.), (.|.)))
-import Parse (Expr (..), LogicExpr (..), Stmt (..))
+import Defs ( Stmt(..), LogicExpr(..), Expr(..) ) 
 
 preEvaluate :: Stmt -> Stmt
 preEvaluate stmt

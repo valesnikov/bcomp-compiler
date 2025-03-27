@@ -2,3 +2,6 @@ dist-newstyle/
 *.bc
 *.local
 *.prof
+release.sh
+bcompc
+

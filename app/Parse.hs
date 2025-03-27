@@ -1,12 +1,10 @@
 module Parse
-  ( Expr (..),
-    LogicExpr (..),
-    Stmt (..),
-    parseProgramm,
+  ( parseProgramm,
   )
 where
 
 import Control.Applicative ((<|>))
+import Defs (Expr (..), LogicExpr (..), Stmt (..))
 import Text.Parsec (choice, many, optionMaybe, try)
 import Text.Parsec.Char (char)
 import Text.Parsec.Combinator (eof)
@@ -20,20 +18,6 @@ import Text.Parsec.Language (emptyDef)
 import Text.Parsec.Prim (parse)
 import Text.Parsec.String (Parser)
 import Text.Parsec.Token qualified as Token
-
-data Expr
-  = EConst Integer -- literal
-  | EIdent String -- variable identifier
-  | ELoad Expr -- load value from address
-  | EOpNeg Expr -- -ex
-  | EOpAsl Expr -- <<ex
-  | EOpAsr Expr -- >>ex
-  | EOpNot Expr -- ~ex
-  | EOpAdd Expr Expr -- (ex1 + ex2)
-  | EOpSub Expr Expr -- (ex1 - ex2)
-  | EOpAnd Expr Expr -- (ex1 & ex2)
-  | EOpOr Expr Expr -- (ex1 | ex2)
-  deriving (Show, Eq)
 
 lexer :: Token.TokenParser ()
 lexer =
@@ -116,17 +100,6 @@ expr = buildExpressionParser table term
         <|> (EConst <$> integer)
         <|> (EIdent <$> identifier)
 
-data LogicExpr
-  = LTrue
-  | LFalse
-  | LOpEq Expr Expr -- (ex1 == ex2)
-  | LOpNeq Expr Expr -- (ex1 != ex2)
-  | LOpLt Expr Expr -- (ex1 < ex2)
-  | LOpGt Expr Expr -- (ex1 > ex2)
-  | LOpLe Expr Expr -- (ex1 <= ex2)
-  | LOpGe Expr Expr -- (ex1 >= ex2)
-  deriving (Show, Eq)
-
 applyM :: (Functor f) => t -> f (t -> b) -> f b
 applyM val = fmap (\x -> x val)
 
@@ -146,18 +119,6 @@ lexpr =
       reservedOp op
       ex2 <- expr
       return (\f -> f ex1 ex2)
-
-data Stmt
-  = SAssign String Expr
-  | SMod String Expr
-  | SIf LogicExpr Stmt (Maybe Stmt)
-  | SWhile LogicExpr Stmt
-  | SBlock [Stmt]
-  | SReturn Expr
-  | SStore Expr Expr
-  | SGoto String
-  | SLabel String
-  deriving (Show, Eq)
 
 stmt :: Parser Stmt
 stmt =

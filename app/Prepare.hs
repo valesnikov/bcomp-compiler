@@ -2,11 +2,7 @@ module Prepare (renameVars) where
 
 import Data.Map.Lazy (Map)
 import Data.Map.Lazy qualified as Map
-import Parse
-  ( Expr (..),
-    LogicExpr (..),
-    Stmt (..),
-  )
+import Defs ( Expr(..), LogicExpr(..), Stmt(..) )
 
 type VarNameMap = Map String String
 

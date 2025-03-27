@@ -29,10 +29,10 @@ instance Show Addr where
 
 data CData
   = CWord Int16 -- Initialization with a value
-  | CWordUnd -- Reservation without initialization
+  | CWordUnd -- Allocate without initialization
   | CWordArr [Int16] -- Initialization with a array
   | CWordDup Int Int16 -- Initialization with a repeated value
-  | CWordDupUnd Int -- Reservation 'n' words without initialization
+  | CWordDupUnd Int -- Allocate 'n' words without initialization
   deriving (Eq)
 
 instance Show CData where
