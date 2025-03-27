@@ -15,11 +15,14 @@ main = do
     inpuFile : _ -> readFile inpuFile
     _ -> getContents
 
-  let a = showAsm . postOptimize . translate . renameVars . preEvaluate <$> parseProgramm "" str
-
-  case a of
+  let mbParsed = parseProgramm "" str
+  case mbParsed of
     Left err -> hPrint stderr err
-    Right result ->
-      case args of
-        _ : outputFile : _ -> writeFile outputFile result
-        _ -> putStr result
+    Right parsed -> do
+      let a = showAsm . postOptimize <$> (translate . renameVars . preEvaluate $ parsed)
+      case a of
+        Left err -> hPrint stderr err
+        Right result ->
+          case args of
+            _ : outputFile : _ -> writeFile outputFile result
+            _ -> putStr result

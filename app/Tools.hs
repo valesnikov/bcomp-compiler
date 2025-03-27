@@ -2,20 +2,19 @@
 
 module Tools where
 
-import Control.Monad.State (MonadState (get, put), evalState)
-import Defs (Translator (..), TranslatorSt (..))
+import Control.Monad.State (MonadState (get, put))
+import Defs (TranslatorState (..), TranslatorT)
 
-newTranslator :: TranslatorSt
-newTranslator =
-  TranslatorSt
-    { counter = 0
-    }
+newTraslatorState :: TranslatorState
+newTraslatorState = TranslatorState {counter = 0, logs = []}
 
-runTranslator :: Translator b -> b
-runTranslator (Translator st) = evalState st newTranslator
+logMessage :: (Monad m) => String -> TranslatorT m ()
+logMessage msg = do
+  st <- get
+  put $ st {logs = msg : logs st}
 
-getUniqId :: Translator Integer
+getUniqId :: (Monad m) => TranslatorT m Integer
 getUniqId = do
   st <- get
-  put $ st {counter = st.counter + 1}
-  return st.counter
+  put $ st {counter = counter st + 1}
+  return $ counter st

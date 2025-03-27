@@ -18,10 +18,7 @@ common build-directives
   ghc-options:        -Wall -Wextra
   default-language:   GHC2021
   default-extensions:
-    DuplicateRecordFields
     LambdaCase
-    NoFieldSelectors
-    OverloadedRecordDot
     OverloadedStrings
 
 executable bcompc

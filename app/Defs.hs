@@ -1,17 +1,18 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Use newtype instead of data" #-}
-
 module Defs where
 
-import Bcomp (Op)
+import Control.Monad.Except
+  ( ExceptT (..),
+    MonadError (..),
+    MonadIO (..),
+    MonadTrans (..),
+    runExceptT,
+  )
+import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.State
   ( MonadState (get, put),
-    State,
     StateT (StateT),
+    runStateT,
   )
-import Data.Int (Int16)
-import Data.Set (Set)
 
 data Expr
   = EConst Integer -- literal
@@ -50,30 +51,61 @@ data Stmt
   | SLabel String
   deriving (Show, Eq)
 
-data LdInfo = LdInfo
-  { func :: String -> String,
-    goto :: String -> String,
-    branch :: String -> Translator String,
-    const :: String -> String,
-    global :: String -> String
+-- Типы для состояния и ошибок
+data TranslatorState = TranslatorState
+  { counter :: Integer,
+    logs :: [String]
   }
+  deriving (Show)
 
-data FuncLd = FuncLD
-  { name :: String,
-    constants :: Set Int16,
-    globals :: Set String,
-    body :: LdInfo -> [Op]
+data TranslationError
+  = NotImplemented String
+  | NumberTooBig Integer
+  | OtherError String
+  deriving (Show, Eq)
+
+newtype TranslatorT m a = TranslatorT
+  { unTranslatorT :: ExceptT TranslationError (StateT TranslatorState m) a
   }
-
-data TranslatorSt = TranslatorSt
-  { counter :: Integer
-  }
-
-newtype Translator a = Translator (State TranslatorSt a)
   deriving (Functor, Applicative, Monad)
 
-instance MonadState TranslatorSt Translator where
-  get :: Translator TranslatorSt
-  get = Translator get
-  put :: TranslatorSt -> Translator ()
-  put s = Translator (put s)
+type Translator a = TranslatorT Identity a
+
+instance MonadTrans TranslatorT where
+  lift :: (Monad m) => m a -> TranslatorT m a
+  lift = TranslatorT . lift . lift
+
+instance (MonadIO m) => MonadIO (TranslatorT m) where
+  liftIO :: (MonadIO m) => IO a -> TranslatorT m a
+  liftIO = TranslatorT . liftIO
+
+instance (Monad m) => MonadState TranslatorState (TranslatorT m) where
+  get :: (Monad m) => TranslatorT m TranslatorState
+  get = TranslatorT $ lift get
+  put :: (Monad m) => TranslatorState -> TranslatorT m ()
+  put = TranslatorT . lift . put
+
+instance (Monad m) => MonadError TranslationError (TranslatorT m) where
+  throwError :: (Monad m) => TranslationError -> TranslatorT m a
+  throwError = TranslatorT . throwError
+  catchError :: (Monad m) => TranslatorT m a -> (TranslationError -> TranslatorT m a) -> TranslatorT m a
+  catchError (TranslatorT m) handler =
+    TranslatorT $ catchError m (unTranslatorT . handler)
+
+runTranslatorT :: TranslatorT m a -> TranslatorState -> m (Either TranslationError a, TranslatorState)
+runTranslatorT translator = runStateT (runExceptT $ unTranslatorT translator)
+
+evalTranslatorT :: (Monad m) => TranslatorT m a -> TranslatorState -> m (Either TranslationError a)
+evalTranslatorT translator = fmap fst . runTranslatorT translator
+
+execTranslatorT :: (Monad m) => TranslatorT m a -> TranslatorState -> m TranslatorState
+execTranslatorT translator = fmap snd . runTranslatorT translator
+
+runTranslator :: Translator a -> TranslatorState -> (Either TranslationError a, TranslatorState)
+runTranslator translator = runIdentity . runTranslatorT translator
+
+evalTranslator :: Translator a -> TranslatorState -> Either TranslationError a
+evalTranslator translator = runIdentity . evalTranslatorT translator
+
+execTranslator :: Translator a -> TranslatorState -> TranslatorState
+execTranslator translator = runIdentity . execTranslatorT translator

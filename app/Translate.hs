@@ -13,15 +13,24 @@ import Defs
   ( Expr (..),
     LogicExpr (..),
     Stmt (..),
+    TranslationError,
     Translator,
+    evalTranslator,
   )
 import Mangle (getBranchLabel)
-import Tools (runTranslator)
+import Tools (newTraslatorState)
 
-translate :: Stmt -> BcompAsm
-translate s = if last asm /= OP_HLT then asm ++ [OP_HLT] else asm
+translate :: Stmt -> Either TranslationError BcompAsm
+translate stmt = evalTranslator go newTraslatorState
   where
-    asm = mkConstants s ++ mkVars s ++ [OP_LABEL "START"] ++ runTranslator (translateStmt s)
+    go = do
+      prog <- translateStmt stmt
+      let asm = mkConstants stmt ++ mkVars stmt ++ [OP_LABEL "START"] ++ prog
+      if last asm /= OP_HLT
+        then
+          return $ asm ++ [OP_HLT]
+        else
+          return asm
 
 translateStmt :: Stmt -> Translator BcompAsm
 translateStmt stmt = case stmt of
