@@ -2,16 +2,15 @@ module Defs where
 
 import Control.Monad.Except
   ( ExceptT (..),
-    MonadError (..),
-    MonadIO (..),
+    MonadError,
+    MonadIO,
     MonadTrans (..),
     runExceptT,
   )
 import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.State
-  ( MonadState (get, put),
-    StateT (StateT),
-    runStateT,
+  ( MonadState,
+    StateT (..),
   )
 
 data Expr
@@ -67,30 +66,20 @@ data TranslationError
 newtype TranslatorT m a = TranslatorT
   { unTranslatorT :: ExceptT TranslationError (StateT TranslatorState m) a
   }
-  deriving (Functor, Applicative, Monad)
+  deriving
+    ( Functor,
+      Applicative,
+      Monad,
+      MonadError TranslationError,
+      MonadIO,
+      MonadState TranslatorState
+    )
 
 type Translator a = TranslatorT Identity a
 
 instance MonadTrans TranslatorT where
   lift :: (Monad m) => m a -> TranslatorT m a
   lift = TranslatorT . lift . lift
-
-instance (MonadIO m) => MonadIO (TranslatorT m) where
-  liftIO :: (MonadIO m) => IO a -> TranslatorT m a
-  liftIO = TranslatorT . liftIO
-
-instance (Monad m) => MonadState TranslatorState (TranslatorT m) where
-  get :: (Monad m) => TranslatorT m TranslatorState
-  get = TranslatorT $ lift get
-  put :: (Monad m) => TranslatorState -> TranslatorT m ()
-  put = TranslatorT . lift . put
-
-instance (Monad m) => MonadError TranslationError (TranslatorT m) where
-  throwError :: (Monad m) => TranslationError -> TranslatorT m a
-  throwError = TranslatorT . throwError
-  catchError :: (Monad m) => TranslatorT m a -> (TranslationError -> TranslatorT m a) -> TranslatorT m a
-  catchError (TranslatorT m) handler =
-    TranslatorT $ catchError m (unTranslatorT . handler)
 
 runTranslatorT :: TranslatorT m a -> TranslatorState -> m (Either TranslationError a, TranslatorState)
 runTranslatorT translator = runStateT (runExceptT $ unTranslatorT translator)
