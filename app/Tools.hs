@@ -7,18 +7,19 @@ import Control.Monad.State.Class (gets)
 import Defs (TranslatorState (..))
 
 newTraslatorState :: TranslatorState
-newTraslatorState = TranslatorState {counter = 0, logs = []}
+newTraslatorState = TranslatorState {trCounter = 0, trLogs = []}
 
 logMessage :: (MonadState TranslatorState m) => String -> m ()
 logMessage msg = do
   st <- get
-  put $ st {logs = msg : logs st}
+  put $ st {trLogs = msg : trLogs st}
 
 getLogs :: (MonadState TranslatorState m) => m [String]
-getLogs = gets logs
+getLogs = gets trLogs
 
 getUniqId :: (MonadState TranslatorState m) => m Integer
 getUniqId = do
   st <- get
-  put $ st {counter = counter st + 1}
-  return $ counter st
+  put $ st {trCounter = trCounter st + 1}
+  return $ trCounter st
+

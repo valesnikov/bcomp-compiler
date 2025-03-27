@@ -17,7 +17,7 @@ import Defs
     Translator,
     evalTranslator,
   )
-import Mangle (getBranchLabel)
+import Mangle (getUniqLabel)
 import Tools (newTraslatorState)
 
 translate :: Stmt -> Either TranslationError BcompAsm
@@ -43,7 +43,7 @@ translateStmt stmt = case stmt of
   (SGoto label) -> return [OP_JUMP $ AddrAbs label]
   (SIf lexpr ifB mbElseB) -> translateIf lexpr ifB mbElseB
   (SWhile lexpr block) -> do
-    label <- getBranchLabel
+    label <- getUniqLabel
     let bodyWithJump = SBlock [block, SGoto label]
     body <- translateStmt $ SIf lexpr bodyWithJump Nothing
     return $ OP_LABEL label : body
@@ -63,14 +63,14 @@ translateIf = f
 
     perCond e1 e2 ifB mbElseB cnds = do
       let cond = translateLexpr e1 e2
-      m1 <- getBranchLabel
+      m1 <- getUniqLabel
       ifBody <- translateStmt ifB
       if isNothing mbElseB || Just (SBlock []) == mbElseB
         then do
           return $ cond ++ map (\x -> x m1) cnds ++ ifBody ++ [OP_LABEL m1]
         else do
           elseBody <- translateStmt $ fromJust mbElseB
-          m2 <- getBranchLabel
+          m2 <- getUniqLabel
           return $
             cond
               ++ map (\x -> x m1) cnds

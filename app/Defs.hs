@@ -12,7 +12,7 @@ import Control.Monad.State
   ( MonadState,
     StateT (..),
   )
-
+  
 data Expr
   = EConst Integer -- literal
   | EIdent String -- variable identifier
@@ -50,17 +50,27 @@ data Stmt
   | SLabel String
   deriving (Show, Eq)
 
--- Типы для состояния и ошибок
+data TopStmt
+  = TSAssign String Integer
+  | TSFunc Func
+
+data Func = Func
+  { tsfName :: String,
+    tsfArgs :: [String],
+    tsfBody :: [Stmt]
+  }
+
 data TranslatorState = TranslatorState
-  { counter :: Integer,
-    logs :: [String]
+  { trCounter :: Integer,
+    trLogs :: [String]
   }
   deriving (Show)
 
 data TranslationError
-  = NotImplemented String
-  | NumberTooBig Integer
-  | OtherError String
+  = TENotImplemented String
+  | TENumberTooBig Integer
+  | TEOtherError String
+  | TEUnknownVariable String
   deriving (Show, Eq)
 
 newtype TranslatorT m a = TranslatorT
@@ -75,8 +85,6 @@ newtype TranslatorT m a = TranslatorT
       MonadState TranslatorState
     )
 
-type Translator a = TranslatorT Identity a
-
 instance MonadTrans TranslatorT where
   lift :: (Monad m) => m a -> TranslatorT m a
   lift = TranslatorT . lift . lift
@@ -89,6 +97,8 @@ evalTranslatorT translator = fmap fst . runTranslatorT translator
 
 execTranslatorT :: (Monad m) => TranslatorT m a -> TranslatorState -> m TranslatorState
 execTranslatorT translator = fmap snd . runTranslatorT translator
+
+type Translator a = TranslatorT Identity a
 
 runTranslator :: Translator a -> TranslatorState -> (Either TranslationError a, TranslatorState)
 runTranslator translator = runIdentity . runTranslatorT translator

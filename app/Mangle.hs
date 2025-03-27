@@ -1,18 +1,19 @@
 module Mangle where
 
-import Defs (Translator)
+import Control.Monad.RWS (MonadState)
+import Defs (TranslatorState)
 import Tools (getUniqId)
 
 mangleFunction :: String -> String
 mangleFunction name = "func_" ++ name
 
-mangleConst :: Integer -> String
-mangleConst num = "const_" ++ show num
-
 mangleGlobVar :: String -> String
-mangleGlobVar name = "global_" ++ name
+mangleGlobVar name = "glob_" ++ name
 
-getBranchLabel :: Translator String
-getBranchLabel = do
+getConstName :: (Integral a, Show a) => a -> [Char]
+getConstName i = "const_" ++ show i
+
+getUniqLabel :: (MonadState TranslatorState m) => m String
+getUniqLabel = do
   i <- getUniqId
-  return $ "branch_" ++ show i
+  return $ 'l' : show i
