@@ -12,7 +12,7 @@ import Control.Monad.State
   ( MonadState,
     StateT (..),
   )
-  
+
 data Expr
   = EConst Integer -- literal
   | EIdent String -- variable identifier
@@ -89,7 +89,7 @@ instance MonadTrans TranslatorT where
   lift :: (Monad m) => m a -> TranslatorT m a
   lift = TranslatorT . lift . lift
 
-runTranslatorT :: TranslatorT m a -> TranslatorState -> m (Either TranslationError a, TranslatorState)
+runTranslatorT :: (Monad m) => TranslatorT m a -> TranslatorState -> m (Either TranslationError a, TranslatorState)
 runTranslatorT translator = runStateT (runExceptT $ unTranslatorT translator)
 
 evalTranslatorT :: (Monad m) => TranslatorT m a -> TranslatorState -> m (Either TranslationError a)

@@ -2,12 +2,14 @@ module Prepare (renameVars, resolveNames) where
 
 import Control.Monad (forM, when)
 import Control.Monad.Except (MonadError (..))
+import Control.Monad.Identity (Identity (runIdentity))
 import Data.List (partition)
 import Data.Map.Lazy (Map)
 import Data.Map.Lazy qualified as Map
 import Data.Maybe (fromJust, isJust)
 import Defs (Expr (..), Func (..), LogicExpr (..), Stmt (..), TopStmt (..), TranslationError (..), Translator)
 import Mangle (getUniqLabel, mangleFunction, mangleGlobVar)
+import Tools (mapExprIdent, mapLExprIdent)
 
 type VarNameMap = Map String String
 
@@ -165,29 +167,12 @@ renameStmt s mp = case s of
         return (SLabel newLabel, newMp)
 
 renameLExpr :: LogicExpr -> VarNameMap -> LogicExpr
-renameLExpr logicExpr mp = case logicExpr of
-  LTrue -> LTrue
-  LFalse -> LFalse
-  LOpEq e1 e2 -> LOpEq (renameExpr e1 mp) (renameExpr e2 mp)
-  LOpNeq e1 e2 -> LOpNeq (renameExpr e1 mp) (renameExpr e2 mp)
-  LOpLt e1 e2 -> LOpLt (renameExpr e1 mp) (renameExpr e2 mp)
-  LOpGt e1 e2 -> LOpGt (renameExpr e1 mp) (renameExpr e2 mp)
-  LOpLe e1 e2 -> LOpLe (renameExpr e1 mp) (renameExpr e2 mp)
-  LOpGe e1 e2 -> LOpGe (renameExpr e1 mp) (renameExpr e2 mp)
+renameLExpr lexpr mp =
+  runIdentity $ mapLExprIdent (\x -> return $ mp Map.! x) lexpr
 
 renameExpr :: Expr -> VarNameMap -> Expr
-renameExpr expression mp = case expression of
-  EConst i -> EConst i
-  EIdent name -> EIdent (mp Map.! name)
-  ELoad e1 -> ELoad (renameExpr e1 mp)
-  EOpNeg e1 -> EOpNeg (renameExpr e1 mp)
-  EOpAsl e1 -> EOpAsl (renameExpr e1 mp)
-  EOpAsr e1 -> EOpAsr (renameExpr e1 mp)
-  EOpNot e1 -> EOpNot (renameExpr e1 mp)
-  EOpAdd e1 e2 -> EOpAdd (renameExpr e1 mp) (renameExpr e2 mp)
-  EOpSub e1 e2 -> EOpSub (renameExpr e1 mp) (renameExpr e2 mp)
-  EOpAnd e1 e2 -> EOpAnd (renameExpr e1 mp) (renameExpr e2 mp)
-  EOpOr e1 e2 -> EOpOr (renameExpr e1 mp) (renameExpr e2 mp)
+renameExpr ex mp =
+  runIdentity $ mapExprIdent (\x -> return $ mp Map.! x) ex
 
 checkName :: String -> VarNameMap -> Translator ()
 checkName name mp = when (name `Map.notMember` mp) $ throwError $ TEUnknownVariable name
