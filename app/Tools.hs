@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-unused-do-bind #-}
-
 module Tools where
 
 import Control.Monad.State (MonadState (get, put))

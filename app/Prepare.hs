@@ -119,16 +119,19 @@ renameStmts stmts = rename stmts []
 
 renameStmt :: Stmt -> VarNameMap -> Translator (Stmt, VarNameMap)
 renameStmt s mp = case s of
+  --
   SAssign name ex -> do
     newName <- getUniqLabel
     let newMp = Map.insert name newName mp
     let newEx = renameExpr ex newMp
     return (SAssign newName newEx, newMp)
+  --
   SMod name ex -> do
     checkName name mp
     let newName = mp Map.! name
     let newEx = renameExpr ex mp
     return (SMod newName newEx, mp)
+  --
   SIf lexpr ifB mbElseB -> do
     let newLex = renameLExpr lexpr mp
     (newIfB, _) <- renameStmt ifB mp
@@ -138,17 +141,22 @@ renameStmt s mp = case s of
         return (SIf newLex newIfB (Just newElseB), mp)
       else do
         return (SIf newLex newIfB Nothing, mp)
+  --
   SWhile lexpr stmt -> do
     let newLex = renameLExpr lexpr mp
     (newStmt, _) <- renameStmt stmt mp
     return (SWhile newLex newStmt, mp)
+  --
   SBlock stmts -> do
     (newStmts, _) <- renameStmts stmts mp
     return (SBlock newStmts, mp)
+  --
   SReturn ex ->
     return (SReturn (renameExpr ex mp), mp)
+  --
   SStore ex1 ex2 ->
     return (SStore (renameExpr ex1 mp) (renameExpr ex2 mp), mp)
+  --
   SGoto label ->
     if label `Map.member` mp
       then
@@ -157,6 +165,7 @@ renameStmt s mp = case s of
         newLabel <- getUniqLabel
         let newMp = Map.insert label newLabel mp
         return (SGoto newLabel, newMp)
+  --
   SLabel label ->
     if label `Map.member` mp
       then

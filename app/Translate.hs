@@ -163,7 +163,6 @@ getConstants :: Stmt -> Set Integer
 getConstants = go
   where
     go x = case x of
-      (SAssign _ (EConst _)) -> Set.empty
       (SAssign _ expr) -> fromExpr expr
       (SMod _ expr) -> fromExpr expr
       (SIf lexpr b1 b2) ->
