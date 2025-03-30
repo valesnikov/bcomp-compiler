@@ -3,15 +3,13 @@ module Defs where
 import Control.Monad.Except
   ( ExceptT (..),
     MonadError,
-    MonadIO,
-    MonadTrans (..),
     runExceptT,
   )
+import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Identity (Identity (runIdentity))
-import Control.Monad.State
-  ( MonadState,
-    StateT (..),
-  )
+import Control.Monad.State (StateT (..))
+import Control.Monad.State.Class (MonadState)
+import Control.Monad.Trans (MonadTrans (..))
 
 data Expr
   = EConst Integer -- literal

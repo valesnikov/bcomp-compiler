@@ -1,17 +1,138 @@
-module Prepare (renameVars, resolveNames) where
+module Prepare (renameVars, runRenamer, renameTop') where
 
 import Control.Monad (forM, when)
 import Control.Monad.Except (MonadError (..))
-import Control.Monad.Identity (Identity (runIdentity))
-import Data.List (partition)
+import Control.Monad.State (State, modify, runState)
+import Control.Monad.State.Class (get, put)
+import Control.Monad.Trans (lift)
 import Data.Map.Lazy (Map)
 import Data.Map.Lazy qualified as Map
-import Data.Maybe (fromJust, isJust)
-import Defs (Expr (..), Func (..), LogicExpr (..), Stmt (..), TopStmt (..), TranslationError (..), Translator)
-import Mangle (getUniqLabel, mangleFunction, mangleGlobVar)
+import Defs (Expr (..), Func (..), LogicExpr (..), Stmt (..), TopStmt (..), TranslationError (..), TranslatorT, runTranslatorT)
+import Mangle (getUniqLabel, mangleFunction)
 import Tools (mapExprIdent, mapLExprIdent)
 
 type VarNameMap = Map String String
+
+type Renamer a = TranslatorT (State VarNameMap) a
+
+rnmLabel :: String -> Renamer String
+rnmLabel sym = do
+  mp <- lift get
+  if sym `Map.member` mp
+    then
+      return $ mp Map.! sym
+    else do
+      newSym <- getUniqLabel
+      lift $ put $ Map.insert sym newSym mp
+      return newSym
+
+-- throw error when name unknown
+rnmUse :: String -> Renamer String
+rnmUse sym = do
+  mp <- lift get
+  when (sym `Map.notMember` mp) $
+    throwError (TEUnknownVariable sym)
+  return $ mp Map.! sym
+
+-- rewrite name
+rnmAssign :: String -> Renamer String
+rnmAssign sym = do
+  mp <- lift get
+  newSym <- getUniqLabel
+  lift $ put $ Map.insert sym newSym mp
+  return newSym
+
+-- just add "func_" prefix
+rnmFunc :: String -> Renamer String
+rnmFunc sym = do
+  let newSym = mangleFunction sym
+  lift $ modify (Map.insert sym newSym)
+  return newSym
+
+-- ignores name map changes
+inner :: Renamer a -> Renamer a
+inner func = do
+  mp <- lift get
+  result <- func
+  lift $ put mp
+  return result
+
+runRenamer :: (Monad m) => Renamer a -> TranslatorT m (a, VarNameMap)
+runRenamer rmn = do
+  st <- get
+  let stateM = runTranslatorT rmn st
+  let ((mbResult, newSt), mp) = runState stateM Map.empty
+  put newSt
+  case mbResult of
+    Left err -> throwError err
+    Right val -> return (val, mp)
+
+renameTop' :: [TopStmt] -> Renamer [TopStmt]
+renameTop' stmts = do
+  forM stmts $ \stmt -> do
+    case stmt of
+      TSAssign name v -> do
+        nName <- rnmAssign name
+        return $ TSAssign nName v
+      TSFunc (Func name args body) -> do
+        nName <- rnmFunc name
+        inner $ do
+          nArgs <- forM args rnmAssign
+          nBody <- renameStmts' body
+          return $ TSFunc (Func nName nArgs nBody)
+
+renameStmts' :: [Stmt] -> Renamer [Stmt]
+renameStmts' stmts = do
+  forM stmts $ \stmt -> do
+    case stmt of
+      --
+      SAssign name ex -> do
+        nEx <- renameExpr' ex
+        nName <- rnmAssign name
+        return $ SAssign nName nEx
+      --
+      SMod name ex -> inner $ do
+        nEx <- renameExpr' ex
+        nName <- rnmUse name
+        return $ SMod nName nEx
+      --
+      SIf lx b1 mbB2 -> inner $ do
+        nLx <- renameLExpr' lx
+        nB1 <- inner $ renameStmt' b1
+        nB2 <- case mbB2 of
+          Nothing -> return Nothing
+          Just b2 -> inner $ Just <$> renameStmt' b2
+        return $ SIf nLx nB1 nB2
+      --
+      SWhile lx b -> inner $ do
+        nLx <- renameLExpr' lx
+        nB <- inner $ renameStmt' b
+        return $ SWhile nLx nB
+      --
+      SBlock bs -> inner $ do
+        nBs <- renameStmts' bs
+        return $ SBlock nBs
+      --
+      SReturn ex -> inner $ do
+        nEx <- renameExpr' ex
+        return $ SReturn nEx
+      --
+      SStore e1 e2 -> inner $ do
+        nE1 <- renameExpr' e1
+        nE2 <- renameExpr' e2
+        return $ SStore nE1 nE2
+      --
+      SGoto l -> do
+        nL <- rnmLabel l
+        return $ SGoto nL
+      --
+      SLabel l -> do
+        nL <- rnmLabel l
+        return $ SGoto nL
+  where
+    renameStmt' stmt = head <$> renameStmts' [stmt]
+    renameExpr' = mapExprIdent rnmUse
+    renameLExpr' = mapLExprIdent rnmUse
 
 renameVars :: Stmt -> Stmt
 renameVars = rename Map.empty
@@ -83,105 +204,3 @@ checkAt vnm s =
   if Map.member s vnm
     then vnm Map.! s
     else error $ "Unknown variable: " ++ s
-
-resolveNames :: [TopStmt] -> Translator [TopStmt]
-resolveNames ts = do
-  let (assigns, funcs) = partition isAssign ts
-  newAssigns <- forM assigns $ \x -> renameTop x Map.empty
-  let newMp = Map.unions $ map snd newAssigns
-  newFuncs <- forM funcs $ \x -> renameTop x newMp
-  return $ map fst newAssigns ++ map fst newFuncs
-  where
-    isAssign (TSAssign _ _) = True
-    isAssign _ = False
-
-renameTop :: TopStmt -> VarNameMap -> Translator (TopStmt, VarNameMap)
-renameTop (TSAssign name val) mp = do
-  let newName = mangleGlobVar name
-  let newMp = Map.insert name newName mp
-  return (TSAssign newName val, newMp)
-renameTop (TSFunc (Func name args body)) mp = do
-  let newName = mangleFunction name
-  argsList <- forM args $ \arg -> do
-    new <- getUniqLabel
-    return (arg, new)
-  let argsMp = Map.insert name newName $ Map.fromList argsList
-  newBody <- renameStmts body mp
-  return (TSFunc (Func name args (fst newBody)), argsMp `Map.union` mp)
-
-renameStmts :: [Stmt] -> VarNameMap -> Translator ([Stmt], VarNameMap)
-renameStmts stmts = rename stmts []
-  where
-    rename [] acc mp = return (reverse acc, mp)
-    rename (x : xs) acc mp = do
-      (nX, nMp) <- renameStmt x mp
-      rename xs (nX : acc) nMp
-
-renameStmt :: Stmt -> VarNameMap -> Translator (Stmt, VarNameMap)
-renameStmt s mp = case s of
-  --
-  SAssign name ex -> do
-    newName <- getUniqLabel
-    let newMp = Map.insert name newName mp
-    let newEx = renameExpr ex newMp
-    return (SAssign newName newEx, newMp)
-  --
-  SMod name ex -> do
-    checkName name mp
-    let newName = mp Map.! name
-    let newEx = renameExpr ex mp
-    return (SMod newName newEx, mp)
-  --
-  SIf lexpr ifB mbElseB -> do
-    let newLex = renameLExpr lexpr mp
-    (newIfB, _) <- renameStmt ifB mp
-    if isJust mbElseB
-      then do
-        (newElseB, _) <- renameStmt (fromJust mbElseB) mp
-        return (SIf newLex newIfB (Just newElseB), mp)
-      else do
-        return (SIf newLex newIfB Nothing, mp)
-  --
-  SWhile lexpr stmt -> do
-    let newLex = renameLExpr lexpr mp
-    (newStmt, _) <- renameStmt stmt mp
-    return (SWhile newLex newStmt, mp)
-  --
-  SBlock stmts -> do
-    (newStmts, _) <- renameStmts stmts mp
-    return (SBlock newStmts, mp)
-  --
-  SReturn ex ->
-    return (SReturn (renameExpr ex mp), mp)
-  --
-  SStore ex1 ex2 ->
-    return (SStore (renameExpr ex1 mp) (renameExpr ex2 mp), mp)
-  --
-  SGoto label ->
-    if label `Map.member` mp
-      then
-        return (SGoto (mp Map.! label), mp)
-      else do
-        newLabel <- getUniqLabel
-        let newMp = Map.insert label newLabel mp
-        return (SGoto newLabel, newMp)
-  --
-  SLabel label ->
-    if label `Map.member` mp
-      then
-        return (SLabel (mp Map.! label), mp)
-      else do
-        newLabel <- getUniqLabel
-        let newMp = Map.insert label newLabel mp
-        return (SLabel newLabel, newMp)
-
-renameLExpr :: LogicExpr -> VarNameMap -> LogicExpr
-renameLExpr lexpr mp =
-  runIdentity $ mapLExprIdent (\x -> return $ mp Map.! x) lexpr
-
-renameExpr :: Expr -> VarNameMap -> Expr
-renameExpr ex mp =
-  runIdentity $ mapExprIdent (\x -> return $ mp Map.! x) ex
-
-checkName :: String -> VarNameMap -> Translator ()
-checkName name mp = when (name `Map.notMember` mp) $ throwError $ TEUnknownVariable name

@@ -6,6 +6,7 @@ import Bcomp
     CData (..),
     Op (..),
   )
+import Control.Monad.Except (throwError)
 import Data.Maybe (fromJust, fromMaybe, isNothing, maybeToList)
 import Data.Set (Set)
 import Data.Set qualified as Set
@@ -13,7 +14,7 @@ import Defs
   ( Expr (..),
     LogicExpr (..),
     Stmt (..),
-    TranslationError,
+    TranslationError (TENotImplemented),
     Translator,
     evalTranslator,
   )
@@ -37,7 +38,7 @@ translateStmt stmt = case stmt of
   (SAssign v e) -> translateStmt $ SMod v e
   (SMod var expr) -> return $ translateExpr expr ++ [OP_ST $ AddrAbs var]
   (SReturn expr) -> return $ translateExpr expr ++ [OP_HLT]
-  (SStore _ _) -> error "The BEVM has terrible addressing, no pointers yet"
+  (SStore _ _) -> throwError $ TENotImplemented "The BEVM has terrible addressing, no pointers yet"
   (SBlock stmts) -> concat <$> mapM translateStmt stmts
   (SLabel label) -> return [OP_LABEL label]
   (SGoto label) -> return [OP_JUMP $ AddrAbs label]

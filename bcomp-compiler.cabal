@@ -1,7 +1,7 @@
 cabal-version:   3.0
 name:            bcomp-compiler
 synopsis:        Compiler for basic computer (bcomp-ng) of ITMO University
-version:         0.2.0.0
+version:         0.2.1.0
 license:         MIT
 license-file:    LICENSE
 author:          Vladimir Lesnikov
