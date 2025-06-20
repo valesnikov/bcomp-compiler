@@ -1,22 +1,17 @@
 module Tools where
 
+import Control.Monad (forM)
 import Control.Monad.State (MonadState (get, put))
-import Control.Monad.State.Class (gets)
-import Data.Functor ((<&>))
-import Defs (Expr (..), LogicExpr (..), TranslatorState (..))
+import Control.Monad.Writer.Class (tell)
+import Defs (Expr (..), LogicExpr (..), TranslatorLog (..), TranslatorM, TranslatorState (..))
 
 newTraslatorState :: TranslatorState
-newTraslatorState = TranslatorState {trCounter = 0, trLogs = []}
+newTraslatorState = TranslatorState {trCounter = 0}
 
-logMessage :: (MonadState TranslatorState m) => String -> m ()
-logMessage msg = do
-  st <- get
-  put $ st {trLogs = msg : trLogs st}
+logMessage :: (TranslatorM m) => String -> m ()
+logMessage = tell . TranslatorLog . pure
 
-getLogs :: (MonadState TranslatorState m) => m [String]
-getLogs = gets trLogs
-
-getUniqId :: (MonadState TranslatorState m) => m Integer
+getUniqId :: (TranslatorM m) => m Integer
 getUniqId = do
   st <- get
   put $ st {trCounter = trCounter st + 1}
@@ -36,13 +31,13 @@ mapLExprIdent f = mapLExpr (return, f)
 
 mapExpr :: (Monad m) => (Integer -> m Integer, String -> m String) -> Expr -> m Expr
 mapExpr f expression = case expression of
-  EConst i -> fst f i <&> EConst
-  EIdent s -> snd f s <&> EIdent
-  ELoad ex -> mapExpr f ex <&> ELoad
-  EOpNeg ex -> mapExpr f ex <&> EOpNeg
-  EOpAsl ex -> mapExpr f ex <&> EOpAsl
-  EOpAsr ex -> mapExpr f ex <&> EOpAsr
-  EOpNot ex -> mapExpr f ex <&> EOpNot
+  EConst i -> EConst <$> fst f i
+  EIdent s -> EIdent <$> snd f s
+  ELoad ex -> ELoad <$> mapExpr f ex
+  EOpNeg ex -> EOpNeg <$> mapExpr f ex
+  EOpAsl ex -> EOpAsl <$> mapExpr f ex
+  EOpAsr ex -> EOpAsr <$> mapExpr f ex
+  EOpNot ex -> EOpNot <$> mapExpr f ex
   EOpAdd e1 e2 -> do
     ne1 <- mapExpr f e1
     ne2 <- mapExpr f e2
@@ -59,6 +54,10 @@ mapExpr f expression = case expression of
     ne1 <- mapExpr f e1
     ne2 <- mapExpr f e2
     return $ EOpOr ne1 ne2
+  ECall name args -> do
+    nName <- snd f name
+    nArgs <- forM args $ mapExpr f
+    return $ ECall nName nArgs
 
 mapLExpr :: (Monad m) => (Integer -> m Integer, String -> m String) -> LogicExpr -> m LogicExpr
 mapLExpr f ex = case ex of

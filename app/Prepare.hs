@@ -1,138 +1,10 @@
-module Prepare (renameVars, runRenamer, renameTop') where
+module Prepare (renameVars) where
 
-import Control.Monad (forM, when)
-import Control.Monad.Except (MonadError (..))
-import Control.Monad.State (State, modify, runState)
-import Control.Monad.State.Class (get, put)
-import Control.Monad.Trans (lift)
 import Data.Map.Lazy (Map)
 import Data.Map.Lazy qualified as Map
-import Defs (Expr (..), Func (..), LogicExpr (..), Stmt (..), TopStmt (..), TranslationError (..), TranslatorT, runTranslatorT)
-import Mangle (getUniqLabel, mangleFunction)
-import Tools (mapExprIdent, mapLExprIdent)
+import Defs (Expr (..), LogicExpr (..), Stmt (..))
 
 type VarNameMap = Map String String
-
-type Renamer a = TranslatorT (State VarNameMap) a
-
-rnmLabel :: String -> Renamer String
-rnmLabel sym = do
-  mp <- lift get
-  if sym `Map.member` mp
-    then
-      return $ mp Map.! sym
-    else do
-      newSym <- getUniqLabel
-      lift $ put $ Map.insert sym newSym mp
-      return newSym
-
--- throw error when name unknown
-rnmUse :: String -> Renamer String
-rnmUse sym = do
-  mp <- lift get
-  when (sym `Map.notMember` mp) $
-    throwError (TEUnknownVariable sym)
-  return $ mp Map.! sym
-
--- rewrite name
-rnmAssign :: String -> Renamer String
-rnmAssign sym = do
-  mp <- lift get
-  newSym <- getUniqLabel
-  lift $ put $ Map.insert sym newSym mp
-  return newSym
-
--- just add "func_" prefix
-rnmFunc :: String -> Renamer String
-rnmFunc sym = do
-  let newSym = mangleFunction sym
-  lift $ modify (Map.insert sym newSym)
-  return newSym
-
--- ignores name map changes
-inner :: Renamer a -> Renamer a
-inner func = do
-  mp <- lift get
-  result <- func
-  lift $ put mp
-  return result
-
-runRenamer :: (Monad m) => Renamer a -> TranslatorT m (a, VarNameMap)
-runRenamer rmn = do
-  st <- get
-  let stateM = runTranslatorT rmn st
-  let ((mbResult, newSt), mp) = runState stateM Map.empty
-  put newSt
-  case mbResult of
-    Left err -> throwError err
-    Right val -> return (val, mp)
-
-renameTop' :: [TopStmt] -> Renamer [TopStmt]
-renameTop' stmts = do
-  forM stmts $ \stmt -> do
-    case stmt of
-      TSAssign name v -> do
-        nName <- rnmAssign name
-        return $ TSAssign nName v
-      TSFunc (Func name args body) -> do
-        nName <- rnmFunc name
-        inner $ do
-          nArgs <- forM args rnmAssign
-          nBody <- renameStmts' body
-          return $ TSFunc (Func nName nArgs nBody)
-
-renameStmts' :: [Stmt] -> Renamer [Stmt]
-renameStmts' stmts = do
-  forM stmts $ \stmt -> do
-    case stmt of
-      --
-      SAssign name ex -> do
-        nEx <- renameExpr' ex
-        nName <- rnmAssign name
-        return $ SAssign nName nEx
-      --
-      SMod name ex -> inner $ do
-        nEx <- renameExpr' ex
-        nName <- rnmUse name
-        return $ SMod nName nEx
-      --
-      SIf lx b1 mbB2 -> inner $ do
-        nLx <- renameLExpr' lx
-        nB1 <- inner $ renameStmt' b1
-        nB2 <- case mbB2 of
-          Nothing -> return Nothing
-          Just b2 -> inner $ Just <$> renameStmt' b2
-        return $ SIf nLx nB1 nB2
-      --
-      SWhile lx b -> inner $ do
-        nLx <- renameLExpr' lx
-        nB <- inner $ renameStmt' b
-        return $ SWhile nLx nB
-      --
-      SBlock bs -> inner $ do
-        nBs <- renameStmts' bs
-        return $ SBlock nBs
-      --
-      SReturn ex -> inner $ do
-        nEx <- renameExpr' ex
-        return $ SReturn nEx
-      --
-      SStore e1 e2 -> inner $ do
-        nE1 <- renameExpr' e1
-        nE2 <- renameExpr' e2
-        return $ SStore nE1 nE2
-      --
-      SGoto l -> do
-        nL <- rnmLabel l
-        return $ SGoto nL
-      --
-      SLabel l -> do
-        nL <- rnmLabel l
-        return $ SGoto nL
-  where
-    renameStmt' stmt = head <$> renameStmts' [stmt]
-    renameExpr' = mapExprIdent rnmUse
-    renameLExpr' = mapLExprIdent rnmUse
 
 renameVars :: Stmt -> Stmt
 renameVars = rename Map.empty
@@ -176,17 +48,18 @@ forExpr :: VarNameMap -> Expr -> Expr
 forExpr = f
   where
     f vnm ex = case ex of
-      (EConst _) -> ex
-      (EIdent s) -> EIdent $ checkAt vnm s
-      (ELoad e) -> ELoad $ f vnm e
-      (EOpNeg e) -> EOpNeg $ f vnm e
-      (EOpAsl e) -> EOpAsl $ f vnm e
-      (EOpAsr e) -> EOpAsr $ f vnm e
-      (EOpNot e) -> EOpNot $ f vnm e
-      (EOpAdd e1 e2) -> EOpAdd (f vnm e1) (f vnm e2)
-      (EOpSub e1 e2) -> EOpSub (f vnm e1) (f vnm e2)
-      (EOpAnd e1 e2) -> EOpAnd (f vnm e1) (f vnm e2)
-      (EOpOr e1 e2) -> EOpOr (f vnm e1) (f vnm e2)
+      EConst _ -> ex
+      EIdent s -> EIdent $ checkAt vnm s
+      ELoad e -> ELoad $ f vnm e
+      EOpNeg e -> EOpNeg $ f vnm e
+      EOpAsl e -> EOpAsl $ f vnm e
+      EOpAsr e -> EOpAsr $ f vnm e
+      EOpNot e -> EOpNot $ f vnm e
+      EOpAdd e1 e2 -> EOpAdd (f vnm e1) (f vnm e2)
+      EOpSub e1 e2 -> EOpSub (f vnm e1) (f vnm e2)
+      EOpAnd e1 e2 -> EOpAnd (f vnm e1) (f vnm e2)
+      EOpOr e1 e2 -> EOpOr (f vnm e1) (f vnm e2)
+      ECall s es -> ECall (checkAt vnm s) (map (f vnm) es)
 
 forLExpr :: VarNameMap -> LogicExpr -> LogicExpr
 forLExpr vnm le = case le of

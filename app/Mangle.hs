@@ -1,19 +1,30 @@
 module Mangle where
 
-import Control.Monad.RWS (MonadState)
-import Defs (TranslatorState)
+import Defs (TranslatorM)
 import Tools (getUniqId)
 
-mangleFunction :: String -> String
-mangleFunction name = "func_" ++ name
+prefixLocal :: String
+prefixLocal = "l_"
 
-mangleGlobVar :: String -> String
-mangleGlobVar name = "glob_" ++ name
+prefixFunc :: String
+prefixFunc = "f_"
 
-getConstName :: (Integral a, Show a) => a -> [Char]
-getConstName i = "const_" ++ show i
+prefixLiteral :: String
+prefixLiteral = "c_"
 
-getUniqLabel :: (MonadState TranslatorState m) => m String
+prefixGlobal :: String
+prefixGlobal = "g_"
+
+mangleFunc :: String -> String
+mangleFunc name = prefixFunc ++ name
+
+mangleGlobal :: String -> String
+mangleGlobal name = prefixGlobal ++ name
+
+mangleConst :: (Integral a, Show a) => a -> [Char]
+mangleConst i = prefixLiteral ++ show i
+
+getUniqLabel :: (TranslatorM m) => m String
 getUniqLabel = do
   i <- getUniqId
-  return $ 'l' : show i
+  return $ prefixLocal ++ show i

@@ -1,4 +1,4 @@
-module Translate (translate, Translator) where
+module Translate (translate) where
 
 import Bcomp
   ( Addr (..),
@@ -15,25 +15,21 @@ import Defs
     LogicExpr (..),
     Stmt (..),
     TranslationError (TENotImplemented),
-    Translator,
-    evalTranslator,
+    TranslatorM,
   )
 import Mangle (getUniqLabel)
-import Tools (newTraslatorState)
 
-translate :: Stmt -> Either TranslationError BcompAsm
-translate stmt = evalTranslator go newTraslatorState
-  where
-    go = do
-      prog <- translateStmt stmt
-      let asm = mkConstants stmt ++ mkVars stmt ++ [OP_LABEL "START"] ++ prog
-      if last asm /= OP_HLT
-        then
-          return $ asm ++ [OP_HLT]
-        else
-          return asm
+translate :: (TranslatorM m) => Stmt -> m BcompAsm
+translate root = do
+  prog <- translateStmt root
+  let asm = mkConstants root ++ mkVars root ++ [OP_LABEL "START"] ++ prog
+  if last asm /= OP_HLT
+    then
+      return $ asm ++ [OP_HLT]
+    else
+      return asm
 
-translateStmt :: Stmt -> Translator BcompAsm
+translateStmt :: (TranslatorM m) => Stmt -> m BcompAsm
 translateStmt stmt = case stmt of
   (SAssign v e) -> translateStmt $ SMod v e
   (SMod var expr) -> return $ translateExpr expr ++ [OP_ST $ AddrAbs var]
@@ -49,7 +45,7 @@ translateStmt stmt = case stmt of
     body <- translateStmt $ SIf lexpr bodyWithJump Nothing
     return $ OP_LABEL label : body
 
-translateIf :: LogicExpr -> Stmt -> Maybe Stmt -> Translator BcompAsm
+translateIf :: (TranslatorM m) => LogicExpr -> Stmt -> Maybe Stmt -> m BcompAsm
 translateIf = f
   where
     f le ifB mbElseB = case le of
@@ -67,7 +63,7 @@ translateIf = f
       m1 <- getUniqLabel
       ifBody <- translateStmt ifB
       if isNothing mbElseB || Just (SBlock []) == mbElseB
-        then do
+        then
           return $ cond ++ map (\x -> x m1) cnds ++ ifBody ++ [OP_LABEL m1]
         else do
           elseBody <- translateStmt $ fromJust mbElseB
@@ -127,6 +123,8 @@ translateExpr = f
       (EOpOr ex1 (EIdent v)) -> f ex1 ++ [OP_OR $ AddrAbs v]
       (EOpOr (EIdent v) ex2) -> f $ EOpOr ex2 $ EIdent v
       (EOpOr ex1 ex2) -> f ex1 ++ [OP_PUSH] ++ f ex2 ++ [OP_OR $ AddrStk 0] ++ pop_
+      --
+      (ECall _ _) -> error "Functions not implemented"
 
 constAddr :: Integer -> Addr
 constAddr v
@@ -198,6 +196,7 @@ getConstants = go
       (EOpSub ex1 ex2) -> Set.union (fromExpr ex1) (fromExpr ex2)
       (EOpAnd ex1 ex2) -> Set.union (fromExpr ex1) (fromExpr ex2)
       (EOpOr ex1 ex2) -> Set.union (fromExpr ex1) (fromExpr ex2)
+      (ECall _ exs) -> Set.unions $ map fromExpr exs
 
 getConstName :: Integer -> String
 getConstName val = "c_" ++ show val

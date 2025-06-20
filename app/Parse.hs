@@ -1,11 +1,12 @@
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 module Parse
   ( parseProgramm,
   )
 where
 
 import Control.Applicative ((<|>))
-import Defs (Expr (..), LogicExpr (..), Stmt (..))
-import Text.Parsec (choice, many, optionMaybe, try)
+import Defs (Expr (..), Func (Func), LogicExpr (..), Stmt (..))
+import Text.Parsec (choice, many, optionMaybe, sepBy, string, try)
 import Text.Parsec.Char (char)
 import Text.Parsec.Combinator (eof)
 import Text.Parsec.Error (ParseError)
@@ -194,6 +195,27 @@ blockStmt = do
   _ <- char '}'
   whiteSpace
   return stmts
+
+funcDecl :: Parser Func
+funcDecl = do
+  _ <- string "func"
+  whiteSpace
+  name <- identifier
+  whiteSpace
+  args <- parseTuple
+  whiteSpace
+  body <- blockStmt
+  return $ Func name args [body]
+
+parseTuple :: Parser [String]
+parseTuple = do
+  _ <- char '(' -- пропускаем открывающую скобку
+  items <- elementsList -- парсим список
+  _ <- char ')' -- пропускаем закрывающую скобку
+  return items -- возвращаем результат
+
+elementsList :: Parser [String]
+elementsList = sepBy identifier (whiteSpace >> char ',' >> whiteSpace)
 
 program :: Parser Stmt
 program = whiteSpace >> SBlock <$> many stmt <* eof

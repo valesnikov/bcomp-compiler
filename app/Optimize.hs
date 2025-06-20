@@ -2,7 +2,7 @@ module Optimize (preEvaluate, postOptimize) where
 
 import Bcomp (Addr (AddrAbs, AddrFwd), BcompAsm, Op (..))
 import Data.Bits (Bits (complement, (.&.), (.|.)))
-import Defs ( Stmt(..), LogicExpr(..), Expr(..) ) 
+import Defs (Expr (..), LogicExpr (..), Stmt (..))
 
 preEvaluate :: Stmt -> Stmt
 preEvaluate stmt
@@ -39,7 +39,7 @@ inBlockEval = map evalStmt . filter (/= SBlock []) . trimToReturn
     trimToReturn [] = []
 
 evalExpr :: Expr -> Expr
-evalExpr = exprDisclosure . f
+evalExpr = exprOpt . f
   where
     f x = case x of
       (EConst val) -> EConst val
@@ -61,26 +61,27 @@ evalExpr = exprDisclosure . f
       (EOpSub a b) -> if a == b then EConst 0 else EOpSub (f a) (f b)
       (EOpAnd a b) -> if a == b then a else EOpAnd (f a) (f b)
       (EOpOr a b) -> if a == b then a else EOpOr (f a) (f b)
+      (ECall n es) -> ECall n (map f es)
 
 evalLexpr :: LogicExpr -> LogicExpr
 evalLexpr x = case x of
   LTrue -> LTrue
   LFalse -> LFalse
-  (LOpEq (EConst n) (EConst m)) -> if n == m then LTrue else LFalse
-  (LOpEq v1 v2) -> if v1 == v2 then LTrue else LOpEq (evalExpr v1) (evalExpr v2)
-  (LOpNeq (EConst n) (EConst m)) -> if n /= m then LTrue else LFalse
-  (LOpNeq v1 v2) -> if v1 == v2 then LFalse else LOpNeq (evalExpr v1) (evalExpr v2)
-  (LOpLt (EConst n) (EConst m)) -> if n < m then LTrue else LFalse
-  (LOpLt v1 v2) -> if v1 == v2 then LFalse else LOpLt (evalExpr v1) (evalExpr v2)
-  (LOpGt (EConst n) (EConst m)) -> if n > m then LTrue else LFalse
-  (LOpGt v1 v2) -> if v1 == v2 then LFalse else LOpGt (evalExpr v1) (evalExpr v2)
-  (LOpLe (EConst n) (EConst m)) -> if n <= m then LTrue else LFalse
-  (LOpLe v1 v2) -> if v1 == v2 then LTrue else LOpLe (evalExpr v1) (evalExpr v2)
-  (LOpGe (EConst n) (EConst m)) -> if n >= m then LTrue else LFalse
-  (LOpGe v1 v2) -> if v1 == v2 then LTrue else LOpGe (evalExpr v1) (evalExpr v2)
+  LOpEq (EConst n) (EConst m) -> if n == m then LTrue else LFalse
+  LOpEq v1 v2 -> if v1 == v2 then LTrue else LOpEq (evalExpr v1) (evalExpr v2)
+  LOpNeq (EConst n) (EConst m) -> if n /= m then LTrue else LFalse
+  LOpNeq v1 v2 -> if v1 == v2 then LFalse else LOpNeq (evalExpr v1) (evalExpr v2)
+  LOpLt (EConst n) (EConst m) -> if n < m then LTrue else LFalse
+  LOpLt v1 v2 -> if v1 == v2 then LFalse else LOpLt (evalExpr v1) (evalExpr v2)
+  LOpGt (EConst n) (EConst m) -> if n > m then LTrue else LFalse
+  LOpGt v1 v2 -> if v1 == v2 then LFalse else LOpGt (evalExpr v1) (evalExpr v2)
+  LOpLe (EConst n) (EConst m) -> if n <= m then LTrue else LFalse
+  LOpLe v1 v2 -> if v1 == v2 then LTrue else LOpLe (evalExpr v1) (evalExpr v2)
+  LOpGe (EConst n) (EConst m) -> if n >= m then LTrue else LFalse
+  LOpGe v1 v2 -> if v1 == v2 then LTrue else LOpGe (evalExpr v1) (evalExpr v2)
 
-exprDisclosure :: Expr -> Expr
-exprDisclosure = f
+exprOpt :: Expr -> Expr
+exprOpt = f
   where
     f ex = case ex of
       (EOpNeg (EOpNeg a)) -> a -- -(-a) -> a
@@ -115,6 +116,7 @@ exprDisclosure = f
       (EConst _) -> ex
       (EIdent _) -> ex
       (ELoad _) -> ex
+      (ECall n es) -> ECall n (map f es)
 
 postOptimize :: BcompAsm -> BcompAsm
 postOptimize = unusedLabelsOpt . singlePassOpt . afterJumpOpt

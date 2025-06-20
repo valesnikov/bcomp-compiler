@@ -5,11 +5,14 @@ import Control.Monad.Except
     MonadError,
     runExceptT,
   )
-import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Identity (Identity (runIdentity))
+import Control.Monad.RWS (MonadWriter)
+import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State (StateT (..))
 import Control.Monad.State.Class (MonadState)
 import Control.Monad.Trans (MonadTrans (..))
+import Control.Monad.Trans.Reader (ReaderT, runReaderT)
+import Control.Monad.Trans.Writer (WriterT (runWriterT))
 
 data Expr
   = EConst Integer -- literal
@@ -23,6 +26,7 @@ data Expr
   | EOpSub Expr Expr -- (ex1 - ex2)
   | EOpAnd Expr Expr -- (ex1 & ex2)
   | EOpOr Expr Expr -- (ex1 | ex2)
+  | ECall String [Expr]
   deriving (Show, Eq)
 
 data LogicExpr
@@ -58,11 +62,15 @@ data Func = Func
     tsfBody :: [Stmt]
   }
 
-data TranslatorState = TranslatorState
-  { trCounter :: Integer,
-    trLogs :: [String]
-  }
+newtype TranslatorState = TranslatorState
+  {trCounter :: Integer}
   deriving (Show)
+
+data TranslationConf = TranslationConf {}
+  deriving (Show)
+
+newtype TranslatorLog = TranslatorLog [String]
+  deriving (Show, Semigroup, Monoid)
 
 data TranslationError
   = TENotImplemented String
@@ -72,37 +80,39 @@ data TranslationError
   deriving (Show, Eq)
 
 newtype TranslatorT m a = TranslatorT
-  { unTranslatorT :: ExceptT TranslationError (StateT TranslatorState m) a
+  { unTranslatorT ::
+      ExceptT TranslationError (StateT TranslatorState (ReaderT TranslationConf (WriterT TranslatorLog m))) a
   }
   deriving
     ( Functor,
       Applicative,
       Monad,
       MonadError TranslationError,
-      MonadIO,
-      MonadState TranslatorState
+      MonadState TranslatorState,
+      MonadReader TranslationConf,
+      MonadWriter TranslatorLog
     )
+
+class
+  ( MonadError TranslationError a,
+    MonadState TranslatorState a,
+    MonadReader TranslationConf a,
+    MonadWriter TranslatorLog a
+  ) =>
+  TranslatorM a
+
+instance (Monad m) => TranslatorM (TranslatorT m)
 
 instance MonadTrans TranslatorT where
   lift :: (Monad m) => m a -> TranslatorT m a
-  lift = TranslatorT . lift . lift
+  lift = TranslatorT . lift . lift . lift . lift
 
-runTranslatorT :: (Monad m) => TranslatorT m a -> TranslatorState -> m (Either TranslationError a, TranslatorState)
-runTranslatorT translator = runStateT (runExceptT $ unTranslatorT translator)
-
-evalTranslatorT :: (Monad m) => TranslatorT m a -> TranslatorState -> m (Either TranslationError a)
-evalTranslatorT translator = fmap fst . runTranslatorT translator
-
-execTranslatorT :: (Monad m) => TranslatorT m a -> TranslatorState -> m TranslatorState
-execTranslatorT translator = fmap snd . runTranslatorT translator
+runTranslatorT :: (Monad m) => TranslatorT m result -> TranslatorState -> TranslationConf -> m (Either TranslationError result, TranslatorState, TranslatorLog)
+runTranslatorT func state conf =
+  (\((a, b), c) -> (a, b, c))
+    <$> runWriterT (runReaderT (runStateT (runExceptT $ unTranslatorT func) state) conf)
 
 type Translator a = TranslatorT Identity a
 
-runTranslator :: Translator a -> TranslatorState -> (Either TranslationError a, TranslatorState)
-runTranslator translator = runIdentity . runTranslatorT translator
-
-evalTranslator :: Translator a -> TranslatorState -> Either TranslationError a
-evalTranslator translator = runIdentity . evalTranslatorT translator
-
-execTranslator :: Translator a -> TranslatorState -> TranslatorState
-execTranslator translator = runIdentity . execTranslatorT translator
+runTranslator :: TranslatorT Identity result -> TranslatorState -> TranslationConf -> (Either TranslationError result, TranslatorState, TranslatorLog)
+runTranslator func state cfg = runIdentity $ runTranslatorT func state cfg
