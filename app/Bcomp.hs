@@ -70,8 +70,8 @@ data Op
   | OP_SWAP
   | OP_DI
   | OP_EI
-  | OP_IN String
-  | OP_OUT String
+  | OP_IN Integer
+  | OP_OUT Integer
   | OP_INT Int
   | OP_AND Addr
   | OP_OR Addr

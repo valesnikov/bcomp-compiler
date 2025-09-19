@@ -89,10 +89,14 @@ renameTopStmt stmt = case stmt of
     inner $ do
       nArgs <- forM args rnmAssign
       nBody <- renameStmts body
-      return $ TSFunc (Func nName nArgs nBody)
+      return $ TSFunc $ Func nName nArgs nBody
 
 renameStmt :: Stmt -> Renamer Stmt
 renameStmt stmt = case stmt of
+    --
+  SOut n ex -> do
+    nEx <- renameExpr ex
+    return $ SOut n nEx
   --
   SAssign name ex -> do
     nEx <- renameExpr ex

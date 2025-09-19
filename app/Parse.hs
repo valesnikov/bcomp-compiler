@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
+
 module Parse
   ( parseProgramm,
   )
@@ -31,7 +32,9 @@ lexer =
             "return",
             "true",
             "false",
-            "goto"
+            "goto",
+            "out",
+            "in"
           ],
         Token.reservedOpNames =
           [ ":",
@@ -98,6 +101,9 @@ expr = buildExpressionParser table term
       ]
     term =
       parens expr
+        <|> try (do
+              _ <- reserved "in"
+              EIn <$> integer)
         <|> (EConst <$> integer)
         <|> (EIdent <$> identifier)
 
@@ -126,7 +132,8 @@ stmt =
   choice $
     fmap
       try
-      [ blockStmt,
+      [ outStmt,
+        blockStmt,
         storeStmt,
         gotoStmt,
         returnStmt,
@@ -136,6 +143,12 @@ stmt =
         assignStmt,
         modifyStmt
       ]
+
+outStmt :: Parser Stmt
+outStmt = do
+  _ <- reserved "out"
+  n <- integer
+  SOut n <$> expr
 
 gotoStmt :: Parser Stmt
 gotoStmt = do

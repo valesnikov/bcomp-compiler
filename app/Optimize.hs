@@ -13,23 +13,24 @@ preEvaluate stmt
 
 evalStmt :: Stmt -> Stmt
 evalStmt x = case x of
-  (SBlock [SBlock as]) -> evalStmt $ SBlock as
-  (SBlock stmts) -> SBlock $ inBlockEval stmts
-  (SReturn expr) -> SReturn $ evalExpr expr
-  (SIf LFalse _ Nothing) -> SBlock []
-  (SIf LFalse _ (Just elseB)) -> elseB
-  (SIf LTrue ifB _) -> ifB
-  (SIf _ (SBlock []) Nothing) -> SBlock []
-  (SIf cond ifB elseB) ->
+  SBlock [SBlock as] -> evalStmt $ SBlock as
+  SBlock stmts -> SBlock $ inBlockEval stmts
+  SReturn expr -> SReturn $ evalExpr expr
+  SIf LFalse _ Nothing -> SBlock []
+  SIf LFalse _ (Just elseB) -> elseB
+  SIf LTrue ifB _ -> ifB
+  SIf _ (SBlock []) Nothing -> SBlock []
+  SIf cond ifB elseB ->
     SIf (evalLexpr cond) (evalStmt ifB) (evalStmt <$> elseB)
-  (SWhile LFalse _) -> SBlock []
-  (SWhile cond block) ->
+  SWhile LFalse _ -> SBlock []
+  SWhile cond block ->
     SWhile (evalLexpr cond) (evalStmt block)
-  (SAssign name expr) -> SAssign name $ evalExpr expr
-  (SMod name expr) -> SMod name $ evalExpr expr
-  (SStore addr expr) -> SStore (evalExpr addr) (evalExpr expr)
-  (SLabel _) -> x
-  (SGoto _) -> x
+  SAssign name expr -> SAssign name $ evalExpr expr
+  SMod name expr -> SMod name $ evalExpr expr
+  SStore addr expr -> SStore (evalExpr addr) (evalExpr expr)
+  SOut n v -> SOut n (evalExpr v)
+  SLabel _ -> x
+  SGoto _ -> x
 
 inBlockEval :: [Stmt] -> [Stmt]
 inBlockEval = map evalStmt . filter (/= SBlock []) . trimToReturn
@@ -62,6 +63,7 @@ evalExpr = exprOpt . f
       (EOpAnd a b) -> if a == b then a else EOpAnd (f a) (f b)
       (EOpOr a b) -> if a == b then a else EOpOr (f a) (f b)
       (ECall n es) -> ECall n (map f es)
+      (EIn _) -> x
 
 evalLexpr :: LogicExpr -> LogicExpr
 evalLexpr x = case x of
@@ -117,6 +119,7 @@ exprOpt = f
       (EIdent _) -> ex
       (ELoad _) -> ex
       (ECall n es) -> ECall n (map f es)
+      (EIn _) -> ex
 
 postOptimize :: BcompAsm -> BcompAsm
 postOptimize = unusedLabelsOpt . singlePassOpt . afterJumpOpt

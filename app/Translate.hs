@@ -44,6 +44,7 @@ translateStmt stmt = case stmt of
     let bodyWithJump = SBlock [block, SGoto label]
     body <- translateStmt $ SIf lexpr bodyWithJump Nothing
     return $ OP_LABEL label : body
+  (SOut num expr) -> return $ translateExpr expr ++ [OP_OUT num]
 
 translateIf :: (TranslatorM m) => LogicExpr -> Stmt -> Maybe Stmt -> m BcompAsm
 translateIf = f
@@ -125,6 +126,8 @@ translateExpr = f
       (EOpOr ex1 ex2) -> f ex1 ++ [OP_PUSH] ++ f ex2 ++ [OP_OR $ AddrStk 0] ++ pop_
       --
       (ECall _ _) -> error "Functions not implemented"
+      --
+      EIn n -> [OP_IN n]
 
 constAddr :: Integer -> Addr
 constAddr v
@@ -174,6 +177,7 @@ getConstants = go
       (SBlock stmts) -> Set.unions $ map getConstants stmts
       (SLabel _) -> Set.empty
       (SGoto _) -> Set.empty
+      (SOut _ expr) -> fromExpr expr
 
     fromLexpr x = case x of
       (LOpEq e1 e2) -> Set.union (fromExpr e1) (fromExpr e2)
@@ -197,6 +201,7 @@ getConstants = go
       (EOpAnd ex1 ex2) -> Set.union (fromExpr ex1) (fromExpr ex2)
       (EOpOr ex1 ex2) -> Set.union (fromExpr ex1) (fromExpr ex2)
       (ECall _ exs) -> Set.unions $ map fromExpr exs
+      (EIn _) -> Set.empty
 
 getConstName :: Integer -> String
 getConstName val = "c_" ++ show val

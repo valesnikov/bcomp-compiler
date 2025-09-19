@@ -20,6 +20,7 @@ renameVars = rename Map.empty
       (SAssign _ _) -> error "Declarations are considered in the context of the parent block"
       (SGoto s) -> SGoto $ "m_" ++ s
       (SLabel s) -> SLabel $ "m_" ++ s
+      (SOut n v) -> SOut n (forExpr vnm v)
 
     inBlock :: VarNameMap -> [Stmt] -> [Stmt]
     inBlock vnm arr = case arr of
@@ -60,6 +61,7 @@ forExpr = f
       EOpAnd e1 e2 -> EOpAnd (f vnm e1) (f vnm e2)
       EOpOr e1 e2 -> EOpOr (f vnm e1) (f vnm e2)
       ECall s es -> ECall (checkAt vnm s) (map (f vnm) es)
+      EIn _ -> ex
 
 forLExpr :: VarNameMap -> LogicExpr -> LogicExpr
 forLExpr vnm le = case le of

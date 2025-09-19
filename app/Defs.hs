@@ -27,6 +27,7 @@ data Expr
   | EOpAnd Expr Expr -- (ex1 & ex2)
   | EOpOr Expr Expr -- (ex1 | ex2)
   | ECall String [Expr]
+  | EIn Integer
   deriving (Show, Eq)
 
 data LogicExpr
@@ -50,6 +51,7 @@ data Stmt
   | SStore Expr Expr
   | SGoto String
   | SLabel String
+  | SOut Integer Expr
   deriving (Show, Eq)
 
 data TopStmt

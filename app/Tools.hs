@@ -58,6 +58,7 @@ mapExpr f expression = case expression of
     nName <- snd f name
     nArgs <- forM args $ mapExpr f
     return $ ECall nName nArgs
+  EIn _ -> return expression
 
 mapLExpr :: (Monad m) => (Integer -> m Integer, String -> m String) -> LogicExpr -> m LogicExpr
 mapLExpr f ex = case ex of
