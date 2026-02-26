@@ -88,6 +88,10 @@ unusedLabelsOpt ops = filter keep ops
     collect acc _ = acc
 
     collectAddr acc (AddrAbs l) = Set.insert l acc
+    collectAddr acc (AddrRel l) = Set.insert l acc
+    collectAddr acc (AddrInd l) = Set.insert l acc
+    collectAddr acc (AddrIndI l) = Set.insert l acc
+    collectAddr acc (AddrIndD l) = Set.insert l acc
     collectAddr acc _ = acc
 
 afterJumpOpt :: BcompAsm -> BcompAsm

@@ -42,3 +42,31 @@ executable bcompc
     , transformers
 
   hs-source-dirs: app
+
+test-suite bcomp-compiler-test
+  import:         build-directives
+  type:           exitcode-stdio-1.0
+  main-is:        TestMain.hs
+  other-modules:
+    Bcomp
+    Language.AST
+    Mangle
+    Optimize.Int16
+    Optimize.PostOptimize
+    Optimize.PreEvaluate
+    Parse
+    Prepare
+    Tools
+    Translate
+    Translate.Layout
+    Translator.Context
+
+  build-depends:
+    , containers
+    , mtl
+    , parsec
+    , transformers
+
+  hs-source-dirs:
+    app
+    test
