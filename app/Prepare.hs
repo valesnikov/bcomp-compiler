@@ -2,7 +2,7 @@ module Prepare (renameVars) where
 
 import Data.Map.Lazy (Map)
 import Data.Map.Lazy qualified as Map
-import Defs (Expr (..), LogicExpr (..), Stmt (..))
+import Language.AST (Expr (..), LogicExpr (..), Stmt (..))
 
 type VarNameMap = Map String String
 
@@ -10,28 +10,29 @@ renameVars :: Stmt -> Stmt
 renameVars = rename Map.empty
   where
     rename :: VarNameMap -> Stmt -> Stmt
-    rename vnm x = case x of
-      (SBlock stmts) -> SBlock $ inBlock vnm stmts
-      (SMod var expr) -> SMod (checkAt vnm var) (forExpr vnm expr)
-      (SIf lexpr ifB mbElseB) -> SIf (forLExpr vnm lexpr) (rename vnm ifB) (rename vnm <$> mbElseB)
-      (SWhile lexpr block) -> SWhile (forLExpr vnm lexpr) (rename vnm block)
-      (SReturn expr) -> SReturn $ forExpr vnm expr
-      (SStore e1 e2) -> SStore (forExpr vnm e1) (forExpr vnm e2)
+    rename scope stmt = case stmt of
+      SBlock stmts -> SBlock $ inBlock scope stmts
+      SMod var expr -> SMod (checkAt scope var) (forExpr scope expr)
+      SIf lexpr ifBranch maybeElseBranch ->
+        SIf (forLExpr scope lexpr) (rename scope ifBranch) (rename scope <$> maybeElseBranch)
+      SWhile lexpr body -> SWhile (forLExpr scope lexpr) (rename scope body)
+      SReturn expr -> SReturn $ forExpr scope expr
+      SStore e1 e2 -> SStore (forExpr scope e1) (forExpr scope e2)
       (SAssign _ _) -> error "Declarations are considered in the context of the parent block"
-      (SGoto s) -> SGoto $ "m_" ++ s
-      (SLabel s) -> SLabel $ "m_" ++ s
-      (SOut n v) -> SOut n (forExpr vnm v)
+      SGoto s -> SGoto $ "m_" ++ s
+      SLabel s -> SLabel $ "m_" ++ s
+      SOut n v -> SOut n (forExpr scope v)
 
     inBlock :: VarNameMap -> [Stmt] -> [Stmt]
-    inBlock vnm arr = case arr of
+    inBlock scope stmts = case stmts of
       [] -> []
-      (SAssign var expr : xs) ->
-        let nvpm =
-              if var `Map.member` vnm
-                then Map.adjust incVarPrefix var vnm
-                else Map.insert var ("v0_" ++ var) vnm
-         in SAssign (nvpm Map.! var) (forExpr vnm expr) : inBlock nvpm xs
-      (x : xs) -> rename vnm x : inBlock vnm xs
+      (SAssign var expr : rest) ->
+        let updatedScope =
+              if var `Map.member` scope
+                then Map.adjust incVarPrefix var scope
+                else Map.insert var ("v0_" ++ var) scope
+         in SAssign (checkAt updatedScope var) (forExpr scope expr) : inBlock updatedScope rest
+      (stmt : rest) -> rename scope stmt : inBlock scope rest
 
 incVarPrefix :: String -> String
 incVarPrefix ('v' : s) = 'v' : show num ++ "_" ++ name
@@ -48,34 +49,33 @@ splitAtFirstExclusive x xs =
 forExpr :: VarNameMap -> Expr -> Expr
 forExpr = f
   where
-    f vnm ex = case ex of
+    f scope ex = case ex of
       EConst _ -> ex
-      EIdent s -> EIdent $ checkAt vnm s
-      ELoad e -> ELoad $ f vnm e
-      EOpNeg e -> EOpNeg $ f vnm e
-      EOpAsl e -> EOpAsl $ f vnm e
-      EOpAsr e -> EOpAsr $ f vnm e
-      EOpNot e -> EOpNot $ f vnm e
-      EOpAdd e1 e2 -> EOpAdd (f vnm e1) (f vnm e2)
-      EOpSub e1 e2 -> EOpSub (f vnm e1) (f vnm e2)
-      EOpAnd e1 e2 -> EOpAnd (f vnm e1) (f vnm e2)
-      EOpOr e1 e2 -> EOpOr (f vnm e1) (f vnm e2)
-      ECall s es -> ECall (checkAt vnm s) (map (f vnm) es)
+      EIdent s -> EIdent $ checkAt scope s
+      ELoad e -> ELoad $ f scope e
+      EOpNeg e -> EOpNeg $ f scope e
+      EOpAsl e -> EOpAsl $ f scope e
+      EOpAsr e -> EOpAsr $ f scope e
+      EOpNot e -> EOpNot $ f scope e
+      EOpAdd e1 e2 -> EOpAdd (f scope e1) (f scope e2)
+      EOpSub e1 e2 -> EOpSub (f scope e1) (f scope e2)
+      EOpAnd e1 e2 -> EOpAnd (f scope e1) (f scope e2)
+      EOpOr e1 e2 -> EOpOr (f scope e1) (f scope e2)
+      ECall s es -> ECall (checkAt scope s) (map (f scope) es)
       EIn _ -> ex
 
 forLExpr :: VarNameMap -> LogicExpr -> LogicExpr
-forLExpr vnm le = case le of
-  (LOpEq e1 e2) -> LOpEq (forExpr vnm e1) (forExpr vnm e2)
-  (LOpNeq e1 e2) -> LOpNeq (forExpr vnm e1) (forExpr vnm e2)
-  (LOpLt e1 e2) -> LOpLt (forExpr vnm e1) (forExpr vnm e2)
-  (LOpGt e1 e2) -> LOpGt (forExpr vnm e1) (forExpr vnm e2)
-  (LOpLe e1 e2) -> LOpLe (forExpr vnm e1) (forExpr vnm e2)
-  (LOpGe e1 e2) -> LOpGe (forExpr vnm e1) (forExpr vnm e2)
+forLExpr scope logicExpr = case logicExpr of
+  (LOpEq e1 e2) -> LOpEq (forExpr scope e1) (forExpr scope e2)
+  (LOpNeq e1 e2) -> LOpNeq (forExpr scope e1) (forExpr scope e2)
+  (LOpLt e1 e2) -> LOpLt (forExpr scope e1) (forExpr scope e2)
+  (LOpGt e1 e2) -> LOpGt (forExpr scope e1) (forExpr scope e2)
+  (LOpLe e1 e2) -> LOpLe (forExpr scope e1) (forExpr scope e2)
+  (LOpGe e1 e2) -> LOpGe (forExpr scope e1) (forExpr scope e2)
   LTrue -> LTrue
   LFalse -> LFalse
 
 checkAt :: VarNameMap -> String -> String
-checkAt vnm s =
-  if Map.member s vnm
-    then vnm Map.! s
-    else error $ "Unknown variable: " ++ s
+checkAt scope name = case Map.lookup name scope of
+  Just renamed -> renamed
+  Nothing -> error $ "Unknown variable: " ++ name

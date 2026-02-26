@@ -1,13 +1,12 @@
-{-# OPTIONS_GHC -Wno-unused-top-binds #-}
-
 module Parse
-  ( parseProgramm,
+  ( parseProgram,
+    parseProgramm,
   )
 where
 
 import Control.Applicative ((<|>))
-import Defs (Expr (..), Func (Func), LogicExpr (..), Stmt (..))
-import Text.Parsec (choice, many, optionMaybe, sepBy, string, try)
+import Language.AST (Expr (..), LogicExpr (..), Stmt (..))
+import Text.Parsec (choice, many, optionMaybe, try)
 import Text.Parsec.Char (char)
 import Text.Parsec.Combinator (eof)
 import Text.Parsec.Error (ParseError)
@@ -80,158 +79,136 @@ reservedOp = Token.reservedOp lexer
 whiteSpace :: Parser ()
 whiteSpace = Token.whiteSpace lexer
 
--- Парсим выражения
-expr :: Parser Expr
-expr = buildExpressionParser table term
+expressionParser :: Parser Expr
+expressionParser = buildExpressionParser operatorTable termParser
   where
-    table =
-      [ [ Prefix (reservedOp "*" >> return ELoad),
-          Prefix (reservedOp "+" >> return id),
-          Prefix (reservedOp "-" >> return EOpNeg),
-          Prefix (reservedOp "~" >> return EOpNot),
-          Prefix (reservedOp "<<" >> return EOpAsl),
-          Prefix (reservedOp ">>" >> return EOpAsr)
+    operatorTable =
+      [ [ Prefix (reservedOp "*" >> pure ELoad),
+          Prefix (reservedOp "+" >> pure id),
+          Prefix (reservedOp "-" >> pure EOpNeg),
+          Prefix (reservedOp "~" >> pure EOpNot),
+          Prefix (reservedOp "<<" >> pure EOpAsl),
+          Prefix (reservedOp ">>" >> pure EOpAsr)
         ],
-        [ Infix (reservedOp "+" >> return EOpAdd) AssocLeft,
-          Infix (reservedOp "-" >> return EOpSub) AssocLeft
+        [ Infix (reservedOp "+" >> pure EOpAdd) AssocLeft,
+          Infix (reservedOp "-" >> pure EOpSub) AssocLeft
         ],
-        [ Infix (reservedOp "|" >> return EOpOr) AssocLeft,
-          Infix (reservedOp "&" >> return EOpAnd) AssocLeft
+        [ Infix (reservedOp "|" >> pure EOpOr) AssocLeft,
+          Infix (reservedOp "&" >> pure EOpAnd) AssocLeft
         ]
       ]
-    term =
-      parens expr
-        <|> try (do
-              _ <- reserved "in"
-              EIn <$> integer)
+    termParser =
+      parens expressionParser
+        <|> try (reserved "in" >> (EIn <$> integer))
         <|> (EConst <$> integer)
         <|> (EIdent <$> identifier)
 
-applyM :: (Functor f) => t -> f (t -> b) -> f b
-applyM val = fmap (\x -> x val)
-
-lexpr :: Parser LogicExpr
-lexpr =
+logicExprParser :: Parser LogicExpr
+logicExprParser =
   (LTrue <$ reserved "true")
     <|> (LFalse <$ reserved "false")
-    <|> try (applyM LOpEq (lexprC "=="))
-    <|> try (applyM LOpNeq (lexprC "!="))
-    <|> try (applyM LOpLt (lexprC "<"))
-    <|> try (applyM LOpGt (lexprC ">"))
-    <|> try (applyM LOpLe (lexprC "<="))
-    <|> try (applyM LOpGe (lexprC ">="))
-  where
-    lexprC op = do
-      ex1 <- expr
-      reservedOp op
-      ex2 <- expr
-      return (\f -> f ex1 ex2)
+    <|> try (parseBinaryLogicExpr "==" LOpEq)
+    <|> try (parseBinaryLogicExpr "!=" LOpNeq)
+    <|> try (parseBinaryLogicExpr "<" LOpLt)
+    <|> try (parseBinaryLogicExpr ">" LOpGt)
+    <|> try (parseBinaryLogicExpr "<=" LOpLe)
+    <|> try (parseBinaryLogicExpr ">=" LOpGe)
 
-stmt :: Parser Stmt
-stmt =
+parseBinaryLogicExpr :: String -> (Expr -> Expr -> LogicExpr) -> Parser LogicExpr
+parseBinaryLogicExpr op mkExpr = do
+  lhs <- expressionParser
+  reservedOp op
+  rhs <- expressionParser
+  pure $ mkExpr lhs rhs
+
+statementParser :: Parser Stmt
+statementParser =
   choice $
-    fmap
+    map
       try
-      [ outStmt,
-        blockStmt,
-        storeStmt,
-        gotoStmt,
-        returnStmt,
-        ifStmt,
-        whileStmt,
-        labelStmt,
-        assignStmt,
-        modifyStmt
+      [ outputStmtParser,
+        blockStmtParser,
+        storeStmtParser,
+        gotoStmtParser,
+        returnStmtParser,
+        ifStmtParser,
+        whileStmtParser,
+        labelStmtParser,
+        assignStmtParser,
+        modifyStmtParser
       ]
 
-outStmt :: Parser Stmt
-outStmt = do
-  _ <- reserved "out"
-  n <- integer
-  SOut n <$> expr
+outputStmtParser :: Parser Stmt
+outputStmtParser = do
+  reserved "out"
+  port <- integer
+  SOut port <$> expressionParser
 
-gotoStmt :: Parser Stmt
-gotoStmt = do
-  _ <- reserved "goto"
+gotoStmtParser :: Parser Stmt
+gotoStmtParser = do
+  reserved "goto"
   SGoto <$> identifier
 
-labelStmt :: Parser Stmt
-labelStmt = do
+labelStmtParser :: Parser Stmt
+labelStmtParser = do
   label <- identifier
-  _ <- reservedOp ":"
-  return $ SLabel label
+  reservedOp ":"
+  pure $ SLabel label
 
-assignStmt :: Parser Stmt
-assignStmt = do
+assignStmtParser :: Parser Stmt
+assignStmtParser = do
   var <- identifier
   reservedOp ":="
-  SAssign var <$> expr
+  SAssign var <$> expressionParser
 
-modifyStmt :: Parser Stmt
-modifyStmt = do
+modifyStmtParser :: Parser Stmt
+modifyStmtParser = do
   var <- identifier
   reservedOp "="
-  SMod var <$> expr
+  SMod var <$> expressionParser
 
-storeStmt :: Parser Stmt
-storeStmt = do
-  _ <- reservedOp "*"
-  addr <- expr
+storeStmtParser :: Parser Stmt
+storeStmtParser = do
+  reservedOp "*"
+  addr <- expressionParser
   reservedOp "="
-  SStore addr <$> expr
+  SStore addr <$> expressionParser
 
-returnStmt :: Parser Stmt
-returnStmt = do
+returnStmtParser :: Parser Stmt
+returnStmtParser = do
   reserved "return"
-  SReturn <$> expr
+  SReturn <$> expressionParser
 
-ifStmt :: Parser Stmt
-ifStmt = do
+ifStmtParser :: Parser Stmt
+ifStmtParser = do
   reserved "if"
-  cond <- lexpr
-  ifPart <- blockStmt
-  elsePart <- optionMaybe (reserved "else" >> (blockStmt <|> ifStmt))
-  return (SIf cond ifPart elsePart)
+  cond <- logicExprParser
+  thenBranch <- blockStmtParser
+  maybeElseBranch <- optionMaybe (reserved "else" >> (blockStmtParser <|> ifStmtParser))
+  pure $ SIf cond thenBranch maybeElseBranch
 
-whileStmt :: Parser Stmt
-whileStmt = do
+whileStmtParser :: Parser Stmt
+whileStmtParser = do
   reserved "while"
-  cond <- lexpr
-  SWhile cond <$> blockStmt
+  cond <- logicExprParser
+  SWhile cond <$> blockStmtParser
 
-blockStmt :: Parser Stmt
-blockStmt = do
+blockStmtParser :: Parser Stmt
+blockStmtParser = do
   _ <- char '{'
   whiteSpace
-  stmts <- SBlock <$> many stmt
+  block <- SBlock <$> many statementParser
   whiteSpace
   _ <- char '}'
   whiteSpace
-  return stmts
+  pure block
 
-funcDecl :: Parser Func
-funcDecl = do
-  _ <- string "func"
-  whiteSpace
-  name <- identifier
-  whiteSpace
-  args <- parseTuple
-  whiteSpace
-  body <- blockStmt
-  return $ Func name args [body]
+programParser :: Parser Stmt
+programParser = whiteSpace >> (SBlock <$> many statementParser) <* eof
 
-parseTuple :: Parser [String]
-parseTuple = do
-  _ <- char '(' -- пропускаем открывающую скобку
-  items <- elementsList -- парсим список
-  _ <- char ')' -- пропускаем закрывающую скобку
-  return items -- возвращаем результат
+parseProgram :: String -> String -> Either ParseError Stmt
+parseProgram = parse programParser
 
-elementsList :: Parser [String]
-elementsList = sepBy identifier (whiteSpace >> char ',' >> whiteSpace)
-
-program :: Parser Stmt
-program = whiteSpace >> SBlock <$> many stmt <* eof
-
+-- Backward-compatible alias with legacy typo.
 parseProgramm :: String -> String -> Either ParseError Stmt
-parseProgramm = parse program
+parseProgramm = parseProgram

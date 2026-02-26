@@ -23,14 +23,17 @@ executable bcompc
   main-is:        Main.hs
   other-modules:
     Bcomp
-    Defs
+    Language.AST
     Mangle
-    Optimize
+    Optimize.Int16
+    Optimize.PostOptimize
+    Optimize.PreEvaluate
     Parse
     Prepare
-    Prepare.Rename
     Tools
     Translate
+    Translate.Layout
+    Translator.Context
 
   build-depends:
     , containers

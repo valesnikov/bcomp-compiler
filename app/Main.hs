@@ -2,28 +2,29 @@ module Main where
 
 import Bcomp (showAsm)
 import Control.Monad (forM_)
-import Defs (TranslationConf (TranslationConf), TranslatorLog (TranslatorLog), runTranslator)
-import Optimize (postOptimize, preEvaluate)
-import Parse (parseProgramm)
+import Optimize.PostOptimize (postOptimize)
+import Optimize.PreEvaluate (preEvaluate)
+import Parse (parseProgram)
 import Prepare (renameVars)
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import System.IO (hPrint, hPutStrLn, stderr)
-import Tools (newTraslatorState)
+import Tools (newTranslatorState)
 import Translate (translate)
+import Translator.Context (TranslationConf (TranslationConf), TranslatorLog (TranslatorLog), runTranslator)
 
 main :: IO ()
 main = do
   args <- getArgs
   str <- case args of
-    inpuFile : _ -> readFile inpuFile
+    inputFile : _ -> readFile inputFile
     _ -> getContents
 
-  let mbParsed = parseProgramm "" str
+  let mbParsed = parseProgram "" str
   case mbParsed of
     Left err -> hPrint stderr err >> exitFailure
     Right parsed -> do
-      let (mbRes, _, TranslatorLog logs) = runTranslator (translate . renameVars . preEvaluate $ parsed) newTraslatorState TranslationConf
+      let (mbRes, _, TranslatorLog logs) = runTranslator (translate . renameVars . preEvaluate $ parsed) newTranslatorState TranslationConf
 
       forM_ logs (hPutStrLn stderr)
 
