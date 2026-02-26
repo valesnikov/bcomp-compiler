@@ -2,20 +2,22 @@
 A program that compiles a simple imperative language into bcomp-ng assembler
 
 # Usage
-```bash
-bcompc #input from stdin, output to stdout
-bcompc input.bc #output to stdout
-bcompc input.bc output.asm
+```
+Usage: bcompc [INPUT] [OUTPUT]
+
+  Compile source code to ITMO's bcomp-ng assembly
+
+Available options:
+  INPUT                    Path to source file (default: stdin)
+  OUTPUT                   Path to output file (default: stdout)
+  -h,--help                Show this help text
 ```
 # Install
-## Binary
-Perhaps the required version is built already on the [releases page](https://github.com/valesnikov/bcomp-compiler/releases)
-## Cabal
 Open the project directory and type (will need `cabal` and `ghc` installed)
 ```bash
 cabal install
 ```
-## Language
+# Language
 Go-like syntax
 ```
 a := 3 /*comment*/
@@ -38,7 +40,7 @@ skip:
 return a + b
 ```
 All values represent integer signed 16 bit numbers (int16)
-### Statements
+## Statements
 * `{var} := {expr}` - assignment operator
 * `{var} = {expr}` - modifying operator
 * `goto {label}` - continues execution from the given label
@@ -46,8 +48,9 @@ All values represent integer signed 16 bit numbers (int16)
 * `return {expr}` - puts the result of the expression into the AC register and stops execution with HLT
 * `if {logic_expr} {stmts} [else {stmts}] ` - conditional execution
 * `while {logic_expr} {stmts}` - preconditioned loop
+* `out {port} {expr}` - writes expression value to output port
 
-### Logic expressions
+## Logic expressions
 * `{expr} == {expr}` - equally
 * `{expr} != {expr}` - not equal
 * `{expr} > {expr}` - greater
@@ -55,7 +58,7 @@ All values represent integer signed 16 bit numbers (int16)
 * `{expr} >= {expr}` - greater or equally
 * `{expr} <= {expr}` - lower or equally
 
-### Expressions (prioritized)
+## Expressions (prioritized)
 * `+{expr}` - does nothing
 * `-{expr}` - negative value
 * `~{expr}` - bitwise not
@@ -67,3 +70,4 @@ All values represent integer signed 16 bit numbers (int16)
 *
 * `{expr} | {expr}` - bitwise or 
 * `{expr} & {expr}` - bitwise and
+* `in {port}` - reads value from input port

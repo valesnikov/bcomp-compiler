@@ -37,7 +37,6 @@ lexer =
           ],
         Token.reservedOpNames =
           [ ":",
-            "*",
             "~",
             "<<",
             ">>",
@@ -83,8 +82,7 @@ expressionParser :: Parser Expr
 expressionParser = buildExpressionParser operatorTable termParser
   where
     operatorTable =
-      [ [ Prefix (reservedOp "*" >> pure ELoad),
-          Prefix (reservedOp "+" >> pure id),
+      [ [ Prefix (reservedOp "+" >> pure id),
           Prefix (reservedOp "-" >> pure EOpNeg),
           Prefix (reservedOp "~" >> pure EOpNot),
           Prefix (reservedOp "<<" >> pure EOpAsl),
@@ -128,7 +126,6 @@ statementParser =
       try
       [ outputStmtParser,
         blockStmtParser,
-        storeStmtParser,
         gotoStmtParser,
         returnStmtParser,
         ifStmtParser,
@@ -166,13 +163,6 @@ modifyStmtParser = do
   var <- identifier
   reservedOp "="
   SMod var <$> expressionParser
-
-storeStmtParser :: Parser Stmt
-storeStmtParser = do
-  reservedOp "*"
-  addr <- expressionParser
-  reservedOp "="
-  SStore addr <$> expressionParser
 
 returnStmtParser :: Parser Stmt
 returnStmtParser = do

@@ -38,6 +38,7 @@ executable bcompc
   build-depends:
     , containers
     , mtl
+    , optparse-applicative
     , parsec
     , transformers
 
